@@ -611,22 +611,37 @@ def classify_risk(paths: Sequence[str]) -> Risk:
 # enruta cada fase a Hermes a traves de tools/build-lite-hermes.py, que traduce el
 # JSONL de Hermes al stream de eventos que el driver ya sabe leer.
 
-def phase_command(agent: str, model: str, prompt: str) -> list[str]:
+def phase_command(
+    agent: str,
+    model: str,
+    prompt: str,
+    prompt_file: Path | None = None,
+) -> list[str]:
     if PHASE_PROVIDER == "hermes":
         # El prompt viaja por stdin: el comando no lo lleva incrustado, asi que no
         # hay que escaparlo ni se pierde en el historial del proceso.
         return [sys.executable, str(REPO_ROOT / "tools" / "build-lite-hermes.py")]
-    return [
+    command = [
         "opencode", "run", "--format", "json", "--dangerously-skip-permissions", "--agent", agent,
-        "--model", model, f"BUILD_LITE_WORKER:\n{prompt}",
+        "--model", model,
     ]
+    if prompt_file is not None:
+        # Windows limits command lines to 32,767 characters. Implementation
+        # prompts can legitimately exceed that length, so attach the complete
+        # task and keep the command message small.
+        return [
+            *command,
+            "--file", str(prompt_file),
+            "BUILD_LITE_WORKER:\nLee y sigue el encargo completo adjunto.",
+        ]
+    return [*command, f"BUILD_LITE_WORKER:\n{prompt}"]
 
 
 def phase_stdin(prompt: str) -> str | None:
     """The prompt that the phase reads from stdin, or None when it does not.
 
     The Hermes wrapper reads the prompt from stdin so that it never appears in
-    the process arguments. opencode carries it inside the command instead.
+    the process arguments. OpenCode receives large prompts as file attachments.
     """
     if PHASE_PROVIDER != "hermes":
         return None
@@ -656,8 +671,11 @@ def run_phase(
     for attempt in range(1, retries + 1):
         log(f"{name}: attempt {attempt} of {retries}")
         log_path = log_dir / f"{name}-{attempt}.jsonl"
+        prompt_file = log_dir / f"{name}-{attempt}.prompt.md"
+        if PHASE_PROVIDER != "hermes":
+            prompt_file.write_text(prompt, encoding="utf-8")
         code, seconds, milestones = watch_process(
-            phase_command("build", model, prompt),
+            phase_command("build", model, prompt, prompt_file),
             log_path,
             timeout=timeout_minutes * 60,
             cwd=cwd or REPO_ROOT,
@@ -2841,7 +2859,7 @@ def self_test() -> int:
     risk = classify_risk(["src/Shared/Contracts/InstallationManifest.cs"])
     if not risk.required or "contrato compartido" not in risk.reasons:
         failures.append("shared contracts were not classified as sensitive")
-    command = phase_command("build", PLAN_MODEL, "plan")
+    command = phase_command("build", PLAN_MODEL, "plan", Path("phase.prompt.md"))
     if PHASE_PROVIDER == "hermes":
         # El proveedor Hermes lleva el prompt por stdin, no dentro del comando: lo
         # que se comprueba es que la fase lo recibe y que el marcador viaja con el.
@@ -2852,7 +2870,9 @@ def self_test() -> int:
     else:
         if command[:8] != ["opencode", "run", "--format", "json", "--dangerously-skip-permissions", "--agent", "build", "--model"]:
             failures.append("phase command is malformed")
-        if command[-1] != "BUILD_LITE_WORKER:\nplan":
+        if command[-3:-1] != ["--file", "phase.prompt.md"]:
+            failures.append("phase command does not attach its prompt file")
+        if command[-1] != "BUILD_LITE_WORKER:\nLee y sigue el encargo completo adjunto.":
             failures.append("phase command is missing the Build Lite worker marker")
     if PHASE_MAX_ATTEMPTS != 2:
         failures.append("phase retry budget is not fixed at two technical attempts")
