@@ -671,6 +671,7 @@ def run_phase(
     for attempt in range(1, retries + 1):
         log(f"{name}: attempt {attempt} of {retries}")
         log_path = log_dir / f"{name}-{attempt}.jsonl"
+        log_dir.mkdir(parents=True, exist_ok=True)
         prompt_file = log_dir / f"{name}-{attempt}.prompt.md"
         if PHASE_PROVIDER != "hermes":
             prompt_file.write_text(prompt, encoding="utf-8")
@@ -2141,7 +2142,11 @@ def run_worker(story, tree: Worktree, metadata: PlanMetadata | None) -> WorkerRe
     base = legacy.git("rev-parse", f"origin/{BASE_BRANCH}", cwd=tree.path).stdout.strip()
 
     try:
-        preserved_work = implementation_paths(changed_paths(base, cwd=tree.path))
+        preserved_work = (
+            implementation_paths(changed_paths(base, cwd=tree.path))
+            if journal.state_of("implementation") == PHASE_COMPLETE
+            else []
+        )
         if preserved_work:
             log("reusing preserved implementation work; proceeding to verification")
         else:
@@ -2787,6 +2792,13 @@ def hermes_orphan_regression() -> list[str]:
     `hermes` de mentira: lo lanza, mata al envoltorio y comprueba que el nieto
     tambien se va.
     """
+    # The regression fixture is a POSIX shell script. It cannot start on
+    # Windows, where this driver is also supported, so retain the behavioral
+    # check on its supported platform instead of reporting a false failure.
+    if os.name == "nt":
+        log("self-test: AD-12 orphan-process regression is POSIX-only and was not exercised on Windows")
+        return []
+
     import tempfile
 
     failures: list[str] = []

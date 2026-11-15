@@ -12,17 +12,17 @@ qué se espera y a qué informe hay que pegarle el resultado.
 
 ## 1. Por qué en Windows
 
-Cuatro spikes de la épica 12 quedaron **con su veredicto sin cerrar**, y no por dificultad
+Tres spikes de la épica 12 quedaron **con su veredicto sin cerrar**, y no por dificultad
 del producto: por límites del entorno de la máquina Linux de desarrollo.
 
 | Historia | Spike | Qué falta | Informe |
 |---|---|---|---|
-| 12.2 | S-1 · mDNS | una **segunda red con política distinta** (con y sin *multicast*) | `docs/spike-s1-descubrimiento-mdns.md` |
+| 12.2 | S-1 · mDNS | **cerrado el 2026-11-15**: Wi-Fi con *multicast* y WSL2 sin interfaz apta para *multicast*; R-03 sigue abierto | `docs/spike-s1-descubrimiento-mdns.md` |
 | 12.3 | S-5 · reanudación | **N interrupciones** con el hash final, y la escala de **7+ GB** | `docs/spike-s5-reanudacion-paquetes.md` |
 | 12.4 | S-4 · rendimiento | los escenarios de **2, 5, 10 y 20 clientes** con CPU y memoria por cliente | `docs/spike-s4-rendimiento-y-recursos.md` |
 | 12.5 | S-3 · P2P | la **PoC** con tracker interno y tres peers | `docs/spike-s3-poc-p2p.md` |
 
-Los cuatro son **NO BLOQUEANTES** (AD-21): su resultado es una decisión de fase posterior y
+Los spikes son **NO BLOQUEANTES** (AD-21): su resultado es una decisión de fase posterior y
 **no bloquea el cierre del MVP**. Aun así, cierran la evidencia que la espina exige.
 
 Y por encima de ellos está la **13.1**, que es la que **sí cierra el MVP**: la
@@ -85,18 +85,14 @@ registra el paso fallido, su diagnóstico y la condición de reintento (AC3). La
 distingue **SM-1** (la cadena verificable) de **SM-5** (los diez pasos ejecutados), y no
 sustituye una ejecución completa por resultados parciales.
 
-## 3. Los cuatro spikes, uno a uno
+## 3. Los spikes, uno a uno
 
-### 3.1 S-1 · mDNS (12.2)
+### 3.1 S-1 · mDNS (12.2) — cerrado
 
-Ejecutar `MdnsDiscoveryTests` en una red **con** *multicast* y repetirlo en una red **sin**
-*multicast* (un punto de acceso con el filtrado activado, o un equipo con el *multicast*
-deshabilitado en la interfaz). Pegar ambas salidas al informe.
-
-```powershell
-dotnet test tests/IntegrationTests/LANPartyHub.IntegrationTests.csproj `
-  --filter "FullyQualifiedName~MdnsDiscoveryTests"
-```
+Se midió Wi-Fi con *multicast* y una interfaz WSL2 sin `MULTICAST`; el informe registra el
+descubrimiento, el bloqueo controlado y los límites de la evidencia. Sigue pendiente para una
+fase posterior medir un punto de acceso que filtre *multicast* aunque la interfaz lo declare
+disponible.
 
 ### 3.2 S-5 · reanudación (12.3)
 
