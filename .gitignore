@@ -187,6 +187,7 @@ _bmad/**/*.log
 .build-lite/plans/
 # Los paquetes de contexto son la entrada acotada del worker: caché local, nunca historial.
 .build-lite/contexts/
+.build-lite/tmp/
 .tmp-review/
 
 # ── Backups, temporales y varios ────────────────────────────────
