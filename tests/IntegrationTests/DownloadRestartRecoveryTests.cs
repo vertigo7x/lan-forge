@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using LANPartyHub.Client.Application;
 using LANPartyHub.Client.Application.Downloads;
@@ -62,6 +63,11 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
     /// encuentre a medias (AD-16).
     /// </summary>
     private const int ChunkDelayMilliseconds = 20;
+
+    /// <summary>
+    /// Number of interruptions that the chained scenario observes (S-5c).
+    /// </summary>
+    private const int ChainedInterruptions = 5;
 
     private readonly List<string> _temporaryFolders = [];
 
@@ -133,6 +139,91 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
             $"{expectedPercentage} %",
             second.OffsetText,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Five_chained_interruptions_resume_from_each_persisted_offset_and_finish_with_the_same_hash()
+    {
+        // S-5c: N=5 interrupciones encadenadas, cada una con reinicio del proceso del
+        // cliente, y el hash final del paquete completo (AD-11, AD-20, AD-24).
+        var dataFolder = CreateTemporaryFolder();
+
+        await using var host = await TestServer.StartAsync(TestContext.Current.CancellationToken);
+
+        const string packageId = "0195f3b2-4c8a-7c1e-9d33-2f6b8a1c5e74";
+
+        var content = WritePackageBytes(host.DataDirectory, packageId, PackageSize);
+
+        var contentHash = Convert.ToHexString(SHA256.HashData(content));
+
+        using var serverClient = host.CreateClient();
+
+        await RegisterGameAndPublishAsync(serverClient, host.DataDirectory, packageId, content.Length);
+
+        string? operationId = null;
+        long previousOffset = 0;
+
+        for (var interruption = 1; interruption <= ChainedInterruptions; interruption++)
+        {
+            var session = await RunClientAsync(dataFolder, host, packageId, interrupted: true);
+
+            Assert.NotNull(session.Handle);
+
+            // Cada interrupción deja un offset persistido REAL y un parcial en disco, y
+            // la reanudación siguiente AVANZA desde ahí: nunca vuelve a cero (AD-11).
+            Assert.True(
+                session.PersistedOffset > previousOffset,
+                $"La interrupción {interruption} no avanzó el offset persistido: "
+                + $"{previousOffset} -> {session.PersistedOffset}.");
+            Assert.True(
+                session.PartialLength > 0,
+                $"La interrupción {interruption} no dejó parcial en disco.");
+            Assert.True(
+                session.PersistedOffset <= session.PartialLength,
+                "El offset persistido no puede ser mayor que los bytes del parcial.");
+
+            // La identidad de la operación NO se duplica: la reanudación es la misma
+            // operación (AC1, AD-11).
+            operationId ??= session.Handle.OperationId;
+            Assert.Equal(operationId, session.Handle.OperationId);
+
+            // La evidencia es de la PETICIÓN que el cliente envía: cada reanudación pide
+            // el rango que empieza en el offset persistido de la interrupción anterior, y
+            // NUNCA desde cero (AC2, AD-20).
+            if (interruption > 1)
+            {
+                Assert.Contains($"bytes={previousOffset}-", session.RequestedRanges);
+                Assert.DoesNotContain("bytes=0-", session.RequestedRanges);
+            }
+            else
+            {
+                // La PRIMERA sesión es la que inicia la descarga, así que su única
+                // petición empieza en cero. Es la observación que el informe del spike
+                // llama «legítima»: el registro por descarga la confundía con una
+                // divergencia.
+                Assert.Equal("bytes=0-", Assert.Single(session.RequestedRanges));
+            }
+
+            previousOffset = session.PersistedOffset;
+        }
+
+        // La última sesión reanuda y COMPLETA el paquete: el coordinador valida los
+        // bytes y el parcial conserva el contenido ÍNTEGRO.
+        var final = await RunClientAsync(dataFolder, host, packageId, interrupted: false, waitForCompletion: true);
+
+        Assert.NotNull(final.Handle);
+        Assert.Equal(operationId, final.Handle.OperationId);
+        Assert.Equal(PackageSize, final.PartialLength);
+
+        // El hash final del parcial es el del paquete original: las N interrupciones y
+        // sus N reanudaciones NO alteran ni un byte (S-5c, AD-11, AD-24).
+        var sourceHash = await ComputeHashAsync(
+            Path.Combine(host.DataDirectory, DataDirectory.PackagesFolderName, packageId));
+
+        var actualHash = await ComputeHashAsync(final.PartialPath);
+
+        Assert.Equal(sourceHash, actualHash);
+        Assert.Equal(contentHash, actualHash);
     }
 
     [Fact]
@@ -326,7 +417,8 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
         string dataFolder,
         TestServer host,
         string packageId,
-        bool interrupted)
+        bool interrupted,
+        bool waitForCompletion = false)
     {
         var logFolder = CreateTemporaryFolder();
 
@@ -417,6 +509,13 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
 
             await WaitUntilAsync(() => ranges.Count > 0 || recovered.Count == 0);
 
+            if (waitForCompletion)
+            {
+                await WaitUntilAsync(
+                    () => ReadPartialLength(layout, packageId) >= PackageSize,
+                    TimeSpan.FromMinutes(2));
+            }
+
             return new ClientSession(
                 handle,
                 await ReadPersistedOffset(stateStore),
@@ -427,11 +526,28 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
                 viewModel.ProgressText);
         }
 
-        // La PRIMERA ejecución: la descarga empieza y se INTERRUMPE a mitad.
-        var started = await composition.Coordinator.StartAsync(
-            packageId,
-            composition.ContentUriResolver(packageId),
-            TestContext.Current.CancellationToken);
+        // La PRIMERA ejecución: la descarga empieza y se INTERRUMPE a mitad. En las
+        // ejecuciones encadenadas la operación persistida se RECUPERA, así que la sesión
+        // nueva no registra otra intención y reanuda desde el offset persistido.
+        DownloadOperationHandle started;
+
+        var persisted = await stateStore.LoadDownloadOperationsAsync(TestContext.Current.CancellationToken);
+
+        if (persisted.Any(operation => operation.PackageId == packageId))
+        {
+            var recovered = await composition.Coordinator.RecoverAsync(
+                composition.ContentUriResolver,
+                TestContext.Current.CancellationToken);
+
+            started = Assert.Single(recovered, operation => operation.PackageId == packageId);
+        }
+        else
+        {
+            started = await composition.Coordinator.StartAsync(
+                packageId,
+                composition.ContentUriResolver(packageId),
+                TestContext.Current.CancellationToken);
+        }
 
         var partialPath = layout.PartialFilePath(packageId);
 
@@ -445,10 +561,23 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
         //
         // La espera es por más bytes que el intervalo de persistencia, así que el offset
         // persistido es REAL y no un cero (AD-11, SM-2).
-        await WaitUntilAsync(
-            () => ReadPartialLength(layout, packageId) > ProgressCountingStream.PersistenceInterval * 2);
+        var previousLengthBeforePause = ReadPartialLength(layout, packageId);
 
+        await WaitUntilAsync(
+            () => ReadPartialLength(layout, packageId) > previousLengthBeforePause
+                && ReadPartialLength(layout, packageId) > ProgressCountingStream.PersistenceInterval * 2);
+
+        // La pausa CANCELA la transferencia en curso: el parcial deja de crecer cuando
+        // la ejecución termina, así que la sesión observa el offset persistido de una
+        // descarga REALMENTE interrumpida (AD-11, AD-24).
         await composition.Coordinator.PauseAsync(started);
+
+        await WaitUntilAsync(
+            () => started.StateMachine.Current == DownloadState.Paused);
+
+        Assert.Equal(DownloadState.Paused, started.StateMachine.Current);
+
+        var lengthBeforePause = ReadPartialLength(layout, packageId);
 
         // La descarga interrupted: el parcial tiene menos bytes que el paquete, así que
         // hay algo que reanudar (AD-11, SM-2).
@@ -459,7 +588,7 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
         Assert.True(
             await ReadPersistedOffset(stateStore) > 0,
             $"El offset persistido es cero: el estado de la operación es {started.StateMachine.Current} "
-            + $"y el parcial tiene {ReadPartialLength(layout, packageId)} bytes.");
+            + $"y el parcial tiene {lengthBeforePause} bytes.");
 
         Assert.True(
             await ReadPersistedTotal(stateStore) == PackageSize,
@@ -473,6 +602,26 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
             ranges.ToArray(),
             null,
             null);
+    }
+
+    /// <summary>
+    /// Computes the sha256 of a file without loading it into memory (S-5c).
+    /// </summary>
+    /// <param name="path">Absolute path of the file.</param>
+    /// <returns>The hexadecimal sha256 of the file.</returns>
+    private static async Task<string> ComputeHashAsync(string path)
+    {
+        await using var stream = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.Read,
+            bufferSize: 81920,
+            useAsync: true);
+
+        var hash = await SHA256.HashDataAsync(stream, TestContext.Current.CancellationToken);
+
+        return Convert.ToHexString(hash);
     }
 
     /// <summary>
@@ -524,9 +673,11 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
     /// </summary>
     /// <param name="condition">Condition that has to become true.</param>
     /// <returns>A task that completes when the condition holds.</returns>
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private static async Task WaitUntilAsync(
+        Func<bool> condition,
+        TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(15);
+        var deadline = DateTime.UtcNow.Add(timeout ?? TimeSpan.FromSeconds(15));
 
         while (!condition())
         {
@@ -893,10 +1044,19 @@ public sealed class DownloadRestartRecoveryTests : IDisposable
             return read;
         }
 
-        public override ValueTask<int> ReadAsync(
+        public override async ValueTask<int> ReadAsync(
             Memory<byte> buffer,
-            CancellationToken cancellationToken = default) =>
-            new(ReadAsync(buffer.ToArray(), 0, buffer.Length, cancellationToken));
+            CancellationToken cancellationToken = default)
+        {
+            // La lectura tiene que llenar el BUFFER DEL LLAMANTE: una copia intermedia
+            // dejaría el buffer con ceros, y esos ceros acabarían en el parcial, así que
+            // el hash del paquete reanudado nunca coincidiría con el original (AD-20).
+            var read = await _inner.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+
+            await Task.Delay(ChunkDelayMilliseconds, cancellationToken).ConfigureAwait(false);
+
+            return read;
+        }
 
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
 

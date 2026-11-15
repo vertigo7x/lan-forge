@@ -18,7 +18,7 @@ del producto: por límites del entorno de la máquina Linux de desarrollo.
 | Historia | Spike | Qué falta | Informe |
 |---|---|---|---|
 | 12.2 | S-1 · mDNS | **cerrado el 2026-11-15**: Wi-Fi con *multicast* y WSL2 sin interfaz apta para *multicast*; R-03 sigue abierto | `docs/spike-s1-descubrimiento-mdns.md` |
-| 12.3 | S-5 · reanudación | **N interrupciones** con el hash final, y la escala de **7+ GB** | `docs/spike-s5-reanudacion-paquetes.md` |
+| 12.3 | S-5 · reanudación | **medido el 2026-11-15** (N=5 interrupciones y escala a 1 GiB): los 7+ GB no son publicables por un S1 del servidor; queda el nivel E2E en LAN real | `docs/spike-s5-reanudacion-paquetes.md` |
 | 12.4 | S-4 · rendimiento | los escenarios de **2, 5, 10 y 20 clientes** con CPU y memoria por cliente | `docs/spike-s4-rendimiento-y-recursos.md` |
 | 12.5 | S-3 · P2P | la **PoC** con tracker interno y tres peers | `docs/spike-s3-poc-p2p.md` |
 
@@ -96,12 +96,18 @@ disponible.
 
 ### 3.2 S-5 · reanudación (12.3)
 
-Extender `DownloadRestartRecoveryTests` para **N interrupciones** encadenadas, comprobar el
-**hash final** y repetirlo con un paquete de **7+ GB**. El informe deja además una
-**observación abierta**: en una sesión interrumpida posterior, la primera petición
-registrada al servidor fue `bytes=0-`, mientras que en la sesión no interrumpida es
-`bytes={offset}-`. Hay que determinar si es un artefacto del momento en que se registra la
-petición o una divergencia real entre el registro y el parcial.
+Se midió en `DownloadRestartRecoveryTests` (N=5 interrupciones encadenadas, hash final idéntico
+al del paquete original) y en `DownloadLargePackageResumeTests` (escala a 1 GiB en la interfaz
+de bucle local, misma cadena). La observación que quedaba abierta —la primera petición
+registrada como `bytes=0-`— está **cerrada**: es la petición legítima de la primera sesión, la
+que inicia la descarga.
+
+**Lo que queda:** los **7+ GB no son alcanzables**, porque la ruta de publicación del servidor
+lee el paquete entero en memoria (`PackageContentStore.ReadBytesAsync`) y la llamada
+`File.ReadAllBytesAsync` del runtime rechaza los ficheros de 2 GiB o más: `POST /api/v1/packages`
+responde `500`. Es un hallazgo de severidad **S1**, escalado (informe §4), que necesita una
+historia propia; la 12.3 sigue `in-progress` con esa reserva. Queda además pendiente el nivel
+**E2E en LAN real** (13.1).
 
 ### 3.3 S-4 · rendimiento (12.4)
 
