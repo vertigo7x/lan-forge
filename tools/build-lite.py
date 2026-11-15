@@ -631,8 +631,8 @@ def phase_command(
         # task and keep the command message small.
         return [
             *command,
-            "--file", str(prompt_file),
             "BUILD_LITE_WORKER:\nLee y sigue el encargo completo adjunto.",
+            "--file", str(prompt_file),
         ]
     return [*command, f"BUILD_LITE_WORKER:\n{prompt}"]
 
@@ -2490,7 +2490,14 @@ def process_story(story, args: argparse.Namespace) -> None:
     require_valid_plan(plan, log_dir, journal)
 
     try:
-        preserved_work = implementation_paths(changed_paths(base))
+        # Reuse only work from an implementation phase that completed and was
+        # recorded. Driver recovery commits must not skip this story's only
+        # implementation attempt.
+        preserved_work = (
+            implementation_paths(changed_paths(base))
+            if journal.state_of("implementation") == PHASE_COMPLETE
+            else []
+        )
         if preserved_work:
             log("reusing preserved implementation work; proceeding to verification")
         else:
@@ -2870,9 +2877,9 @@ def self_test() -> int:
     else:
         if command[:8] != ["opencode", "run", "--format", "json", "--dangerously-skip-permissions", "--agent", "build", "--model"]:
             failures.append("phase command is malformed")
-        if command[-3:-1] != ["--file", "phase.prompt.md"]:
+        if command[-2:] != ["--file", "phase.prompt.md"]:
             failures.append("phase command does not attach its prompt file")
-        if command[-1] != "BUILD_LITE_WORKER:\nLee y sigue el encargo completo adjunto.":
+        if command[-3] != "BUILD_LITE_WORKER:\nLee y sigue el encargo completo adjunto.":
             failures.append("phase command is missing the Build Lite worker marker")
     if PHASE_MAX_ATTEMPTS != 2:
         failures.append("phase retry budget is not fixed at two technical attempts")
