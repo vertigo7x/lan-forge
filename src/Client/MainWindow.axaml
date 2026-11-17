@@ -335,7 +335,7 @@
                     <TextBlock Text="Nombre de usuario" FontSize="12" FontWeight="SemiBold"
                                Foreground="{StaticResource TextSecondaryBrush}"/>
                     <TextBox x:Name="PlayerNameBox" Theme="{StaticResource InputDark}" Height="40"
-                             Watermark="Escribe tu nombre de jugador"
+                             PlaceholderText="Escribe tu nombre de jugador"
                              IsReadOnly="False" Focusable="True"/>
                     <TextBlock Text="Este nombre es el que ven el resto de jugadores en el chat."
                                Theme="{StaticResource T.Caption}" TextWrapping="Wrap"/>

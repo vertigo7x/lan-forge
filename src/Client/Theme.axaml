@@ -152,8 +152,8 @@
                 CornerRadius="{TemplateBinding CornerRadius}"
                 Padding="{TemplateBinding Padding}">
           <Grid>
-            <TextBlock x:Name="PART_Watermark"
-                       Text="{TemplateBinding Watermark}"
+            <TextBlock x:Name="PART_PlaceholderText"
+                       Text="{TemplateBinding PlaceholderText}"
                        Foreground="{TemplateBinding Foreground}"
                        Opacity="0.45"
                        IsHitTestVisible="False"
@@ -170,7 +170,7 @@
       </ControlTemplate>
     </Setter>
     <Style Selector="^:empty">
-      <Style Selector="^ /template/ TextBlock#PART_Watermark">
+      <Style Selector="^ /template/ TextBlock#PART_PlaceholderText">
         <Setter Property="IsVisible" Value="True"/>
       </Style>
     </Style>
