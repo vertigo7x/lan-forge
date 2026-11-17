@@ -157,16 +157,23 @@
                        Foreground="{TemplateBinding Foreground}"
                        Opacity="0.45"
                        IsHitTestVisible="False"
+                       IsVisible="False"
                        VerticalAlignment="Center"
                        Margin="{TemplateBinding Padding}"/>
             <TextPresenter x:Name="PART_TextPresenter"
-                           Text="{TemplateBinding Text, Mode=TwoWay}"
+                           Text="{Binding Text, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}"
                            CaretBrush="{TemplateBinding Foreground}"
+                           SelectionBrush="{TemplateBinding Foreground}"
                            VerticalAlignment="Center"/>
           </Grid>
         </Border>
       </ControlTemplate>
     </Setter>
+    <Style Selector="^:empty">
+      <Style Selector="^ /template/ TextBlock#PART_Watermark">
+        <Setter Property="IsVisible" Value="True"/>
+      </Style>
+    </Style>
   </ControlTheme>
 
   <!-- Switch del design (44x24, knob 18, accent al activar) -->
