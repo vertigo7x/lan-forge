@@ -61,9 +61,11 @@ public sealed class FullLoopbackTests : IDisposable
             Assert.Contains(catalog, e => e.GameId == "quake3" && e.Version == "1.32");
 
             // 4. Instalación completa con progreso.
+            // Se usa un IProgress síncrono (no Progress<T>): Progress<T> encola el callback
+            // en el hilo de fondo y la aserción de "Finished" puede correr antes de que llegue.
             var progress = new List<DownloadProgress>();
             var installed = await session.InstallAsync(
-                "quake3", new Progress<DownloadProgress>(progress.Add), CancellationToken.None);
+                "quake3", new SynchronousProgress<DownloadProgress>(progress.Add), CancellationToken.None);
 
             Assert.Equal("1.32", installed.Version);
             Assert.Equal("fake-game-binary", File.ReadAllText(Path.Combine(installed.InstallPath, "run.exe")));
