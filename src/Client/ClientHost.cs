@@ -6,12 +6,27 @@ namespace LanForge.Client;
 /// <summary>Configuración de datos del cliente.</summary>
 public sealed record ClientOptions(string DataDirectory)
 {
+    /// <summary>
+    /// Variable de entorno que fija la carpeta de datos. Sirve para las pruebas de UI
+    /// (no tocar el perfil real) y para ejecutar el cliente con los datos en otro sitio.
+    /// </summary>
+    public const string DataDirectoryVariable = "LANFORGE_CLIENT_DATA";
+
     public string DownloadsDirectory => Path.Combine(DataDirectory, "downloads");
 
     public string InstallRoot => Path.Combine(DataDirectory, "games");
 
-    public static ClientOptions Default() => new(
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LanForge", "Client"));
+    public static ClientOptions Default()
+    {
+        var configured = Environment.GetEnvironmentVariable(DataDirectoryVariable);
+        if (!string.IsNullOrWhiteSpace(configured))
+        {
+            return new(configured);
+        }
+
+        return new(
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "LanForge", "Client"));
+    }
 }
 
 /// <summary>Raíz de composición del cliente: construye la sesión contra un servidor concreto.</summary>
