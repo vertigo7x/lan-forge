@@ -34,12 +34,13 @@ public partial class MainWindow : Window
     private IChatService? _chat;
     private string _currentChannel = LanForge.Shared.Chat.ChatHubContract.GeneralChannel;
     private readonly ObservableCollection<LanForge.Shared.Chat.ChatMessage> _chatMessages = [];
-    private readonly ObservableCollection<LanForge.Shared.Chat.ChatChannelInfo> _chatChannels = [];
+    private readonly ObservableCollection<ChatChannelItem> _chatChannels = [];
     private readonly ObservableCollection<string> _chatMembers = [];
     private List<CatalogEntry> _catalog = [];
     private List<Domain.InstalledGame> _installed = [];
     private string _filter = "all";
     private string _search = string.Empty;
+    private CatalogSortOrder _sortOrder = CatalogSortOrder.NameAscending;
     private Button? _activeNav;
     private string? _connectedAddress;
     private readonly Button? _startViewButton;
@@ -392,7 +393,7 @@ public partial class MainWindow : Window
         _chatChannels.Clear();
         foreach (var channel in channels)
         {
-            _chatChannels.Add(channel);
+            _chatChannels.Add(ChatChannelItem.From(channel, _catalog));
         }
 
         ChannelCountText.Text = channels.Count.ToString();
@@ -423,10 +424,7 @@ public partial class MainWindow : Window
         ChatSubtitle.Text = $"{members.Count} conectado(s) en {ChannelDisplayName(channel)}";
     }
 
-    private string ChannelDisplayName(string channel) =>
-        string.Equals(channel, LanForge.Shared.Chat.ChatHubContract.GeneralChannel, StringComparison.Ordinal)
-            ? "general"
-            : _catalog.FirstOrDefault(e => e.GameId == channel)?.Title ?? channel;
+    private string ChannelDisplayName(string channel) => ChatChannelItem.DisplayNameFor(channel, _catalog);
 
     private void OnChatMessage(LanForge.Shared.Chat.ChatMessage message)
     {
@@ -451,7 +449,7 @@ public partial class MainWindow : Window
             _chatChannels.Clear();
             foreach (var channel in channels)
             {
-                _chatChannels.Add(channel);
+                _chatChannels.Add(ChatChannelItem.From(channel, _catalog));
             }
 
             ChannelCountText.Text = channels.Count.ToString();
@@ -473,7 +471,7 @@ public partial class MainWindow : Window
 
     private async void OnChannelSelected(object? sender, SelectionChangedEventArgs e)
     {
-        if (ChannelsListBox.SelectedItem is not LanForge.Shared.Chat.ChatChannelInfo channel || _chat is null)
+        if (ChannelsListBox.SelectedItem is not ChatChannelItem channel || _chat is null)
         {
             return;
         }
@@ -569,7 +567,7 @@ public partial class MainWindow : Window
             _ => query,
         };
 
-        var items = query.OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase).ToList();
+        var items = CatalogSort.Apply(query, _sortOrder);
         _cards.Clear();
         foreach (var entry in items)
         {
@@ -582,25 +580,15 @@ public partial class MainWindow : Window
 
         CatalogSubtitle.Text = $"{_catalog.Count} títulos disponibles en el servidor";
         UpdateBanner(items);
-        _ = EnsureServerCoversAsync(items);
+        _ = EnsureServerCoversAsync(items.ToList());
     }
 
-    private string CoverFor(CatalogEntry entry)
-    {
-        var cached = GetCachedCoverPath(entry.CoverPath);
-        return cached ?? CoverAssets[Math.Abs(entry.GameId.GetHashCode()) % CoverAssets.Length];
-    }
+    private string CoverFor(CatalogEntry entry) =>
+        CoverResolver.CachedCoverUri(_options.DataDirectory, entry.CoverPath)
+        ?? CoverResolver.FallbackAsset(entry.GameId, CoverAssets);
 
-    private string? GetCachedCoverPath(string? coverFileName)
-    {
-        if (string.IsNullOrWhiteSpace(coverFileName))
-        {
-            return null;
-        }
-
-        var path = Path.Combine(_options.DataDirectory, "covers", coverFileName);
-        return File.Exists(path) ? new Uri(path).AbsoluteUri : null;
-    }
+    private string? GetCachedCoverPath(string? coverFileName) =>
+        CoverResolver.CachedCoverUri(_options.DataDirectory, coverFileName);
 
     private async Task EnsureServerCoversAsync(List<CatalogEntry> entries)
     {
@@ -620,7 +608,8 @@ public partial class MainWindow : Window
                     continue;
                 }
 
-                var path = Path.Combine(_options.DataDirectory, "covers", entry.CoverPath!);
+                var path = CoverResolver.CoverTargetPath(_options.DataDirectory, entry.CoverPath)
+                    ?? throw new InvalidOperationException($"Nombre de portada no valido: '{entry.CoverPath}'.");
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 await File.WriteAllBytesAsync(path, bytes);
                 var card = _cards.FirstOrDefault(c => c.Entry.GameId == entry.GameId);
@@ -638,7 +627,7 @@ public partial class MainWindow : Window
 
     private GameCardItem? _bannerGame;
 
-    private void UpdateBanner(List<CatalogEntry> visible)
+    private void UpdateBanner(IReadOnlyList<CatalogEntry> visible)
     {
         var featured = visible.FirstOrDefault() ?? _catalog.FirstOrDefault();
         if (featured is null)
@@ -666,6 +655,37 @@ public partial class MainWindow : Window
         {
             _bannerGame.InstallCommand.Execute(null);
         }
+    }
+
+    private async void OnRefreshCatalog(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_session is null)
+        {
+            StatusText.Text = "Conéctate a un servidor para actualizar el catálogo.";
+            return;
+        }
+
+        try
+        {
+            StatusText.Text = "Actualizando catálogo…";
+            await RefreshCatalogAsync();
+            StatusText.Text = $"Catálogo actualizado: {_catalog.Count} títulos.";
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"No se pudo actualizar el catálogo: {ex.Message}";
+        }
+    }
+
+    private void OnSortClick(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        _sortOrder = _sortOrder == CatalogSortOrder.NameAscending
+            ? CatalogSortOrder.NameDescending
+            : CatalogSortOrder.NameAscending;
+        SortText.Text = _sortOrder == CatalogSortOrder.NameAscending
+            ? "Ordenar por nombre (A-Z)"
+            : "Ordenar por nombre (Z-A)";
+        ApplyCatalogView();
     }
 
     private void OnSearchChanged(object? sender, TextChangedEventArgs e)

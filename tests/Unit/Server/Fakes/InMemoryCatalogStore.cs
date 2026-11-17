@@ -61,6 +61,21 @@ public sealed class InMemoryCatalogStore : ICatalogStore
         return Task.CompletedTask;
     }
 
+    public Task<bool> DeleteGameAsync(string gameId, CancellationToken cancellationToken = default)
+    {
+        var packageIds = _packages
+            .Where(p => string.Equals(p.Value.GameId, gameId, StringComparison.Ordinal))
+            .Select(p => p.Key)
+            .ToList();
+        foreach (var packageId in packageIds)
+        {
+            _packages.Remove(packageId);
+        }
+
+        var removedGame = _games.Remove(gameId);
+        return Task.FromResult(packageIds.Count > 0 || removedGame);
+    }
+
     public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyList<ServerOperation>>(_operations.ToArray());
 }

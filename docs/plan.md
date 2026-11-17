@@ -28,3 +28,12 @@ Puedes seguir estas directrices de diseño:
 # Fase 7
 ## Arreglos y mejoras 17/11/2026
 # Bugs
+- En la sección catálogo, las imagenes no se muestran en la aplicación cliente
+- En la sección de chat, cuando se crea un canal, este muestra el identificador del juego, en lugar del nombre
+- En la sección de chat, el área de chat, no muestra comportamiento responsive y el botón de enviar, queda un poco por fuera del área.
+- En la sección de ajustes, hay una etiqueta para proporcionar el nombre de usuario, pero este no se puede escribir en ningún lado
+- En la sección de ajustes, los botones, restablecer y Guardar cambios, necesitan un poco de padding para que las etiquetas no lleguen hasta los bordes.
+# Mejoras
+- En la sección catálogo, habría que añadir un botón para actualizar el catálogo del servidor
+- En la sección catálogo, hay una etiqueta que pone "Ordenar por nombre", pero no es ni un botón ni tampoco hace ninguna acción
+- En la aplicación del servidor, no hay una opción para borrar paquetes de juegos y comienza con su desarrollo

@@ -60,6 +60,25 @@ public sealed class FilePackageContentStore : IPackageContentStore
         return Task.FromResult<Stream?>(new ArchiveEntryStream(archive, entry.Open()));
     }
 
+    public Task<bool> DeleteArchiveAsync(string packageId, CancellationToken cancellationToken = default)
+    {
+        // Confinamiento: el paquete resuelto nunca puede salir de la raiz de contenido.
+        var path = Path.GetFullPath(GetArchivePath(packageId));
+        var root = Path.GetFullPath(_root);
+        if (!path.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        {
+            return Task.FromResult(false);
+        }
+
+        if (!File.Exists(path))
+        {
+            return Task.FromResult(false);
+        }
+
+        File.Delete(path);
+        return Task.FromResult(true);
+    }
+
     private string GetArchivePath(string packageId) => Path.Combine(_root, $"{packageId}.zip");
 
     /// <summary>Stream de una entrada zip que dispone el ZipArchive padre al cerrarse.</summary>

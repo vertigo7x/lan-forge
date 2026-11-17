@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using LanForge.Server.Application;
+using LanForge.Server.ViewModels;
 using LanForge.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -105,6 +106,44 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>Borra un paquete del catalogo. La primera pulsacion pide confirmacion.</summary>
+    private async void OnDeleteGame(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: CatalogRow row })
+        {
+            return;
+        }
+
+        if (row.ConfirmText != "Borrar")
+        {
+            // Segunda pulsacion: el jugador ya ha visto el aviso, se borra de verdad.
+            row.ConfirmText = "Borrar";
+            await DeleteGameAsync(row.GameId);
+            return;
+        }
+
+        row.ConfirmText = "¿Seguro?";
+        StatusText.Text = $"Vuelve a pulsar para borrar '{row.Title}' ({row.GameId}) del catalogo.";
+    }
+
+    private async Task DeleteGameAsync(string gameId)
+    {
+        var services = App.WebServices!;
+        var catalog = services.GetRequiredService<CatalogService>();
+        try
+        {
+            var deleted = await catalog.DeleteGameAsync(gameId, services.GetRequiredService<ICoverStore>());
+            StatusText.Text = deleted
+                ? $"Juego eliminado del catalogo: {gameId}."
+                : $"No habia ningun juego con el id '{gameId}'.";
+            await RefreshAsync();
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error al borrar '{gameId}': {ex.Message}";
+        }
+    }
+
     private async Task RefreshAsync()
     {
         var services = App.WebServices;
@@ -120,7 +159,7 @@ public partial class MainWindow : Window
             .Select(p =>
             {
                 var title = games.FirstOrDefault(g => g.Id == p.GameId)?.Title ?? p.GameId;
-                return $"{title}  —  v{p.Version}  —  {p.FileCount} archivos, {p.TotalSizeBytes:N0} bytes";
+                return new CatalogRow(p.GameId, title, p.Version, p.FileCount, p.TotalSizeBytes);
             })
             .ToArray();
 

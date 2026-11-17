@@ -61,6 +61,30 @@ public static class ApiEndpoints
             return stream is null ? Results.NotFound() : Results.Stream(stream, contentType);
         });
 
+        api.MapDelete("/games/{gameId}", async (string gameId, HttpContext context, CatalogService catalog, ICoverStore covers, IServerLog log, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var deleted = await catalog.DeleteGameAsync(gameId, covers, cancellationToken);
+                if (!deleted)
+                {
+                    await LogAsync(log, context, "game.delete.missing", LogSeverity.Warning, $"El juego '{gameId}' no existe en el catalogo.");
+                    return Results.NotFound();
+                }
+
+                await catalog.RecordOperationAsync(new ServerOperation(
+                    GetOrCreateOperationId(context), GetClientId(context) ?? "organizer", "game.delete",
+                    OperationStatus.Completed, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, gameId), cancellationToken);
+                await LogAsync(log, context, "game.deleted", LogSeverity.Info, $"Juego eliminado del catalogo: {gameId}");
+                return Results.NoContent();
+            }
+            catch (ArgumentException ex)
+            {
+                await LogAsync(log, context, "game.delete.invalid", LogSeverity.Warning, ex.Message);
+                return Results.BadRequest();
+            }
+        });
+
         api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);

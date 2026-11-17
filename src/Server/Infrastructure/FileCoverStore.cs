@@ -54,4 +54,22 @@ public sealed class FileCoverStore : ICoverStore
 
         return Task.FromResult<Stream?>(new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read));
     }
+
+    public Task<bool> DeleteAsync(string fileName, CancellationToken cancellationToken = default)
+    {
+        // Mismo nombre plano validado que en la lectura: nada de rutas ni traversal.
+        if (!FileNamePattern.IsMatch(fileName))
+        {
+            return Task.FromResult(false);
+        }
+
+        var path = Path.Combine(_root, fileName);
+        if (!File.Exists(path))
+        {
+            return Task.FromResult(false);
+        }
+
+        File.Delete(path);
+        return Task.FromResult(true);
+    }
 }

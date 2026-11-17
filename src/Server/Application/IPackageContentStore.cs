@@ -11,4 +11,7 @@ public interface IPackageContentStore
 
     /// <summary>Abre un archivo concreto dentro del .zip (descarga por archivo, compatibilidad).</summary>
     Task<Stream?> OpenReadAsync(string packageId, string relativePath, CancellationToken cancellationToken = default);
+
+    /// <summary>Borra el .zip del paquete. Devuelve false si no habia contenido en disco.</summary>
+    Task<bool> DeleteArchiveAsync(string packageId, CancellationToken cancellationToken = default);
 }

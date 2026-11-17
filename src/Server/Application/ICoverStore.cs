@@ -7,4 +7,7 @@ public interface ICoverStore
     Task<string> SaveAsync(string gameId, string sourceImagePath, CancellationToken cancellationToken = default);
 
     Task<Stream?> OpenReadAsync(string fileName, CancellationToken cancellationToken = default);
+
+    /// <summary>Borra la portada. Devuelve false si no existia.</summary>
+    Task<bool> DeleteAsync(string fileName, CancellationToken cancellationToken = default);
 }

@@ -28,4 +28,9 @@ public interface ICatalogStore
     Task RecordOperationAsync(ServerOperation operation, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Borra el juego y sus paquetes. Devuelve false si no habia nada que borrar.
+    /// </summary>
+    Task<bool> DeleteGameAsync(string gameId, CancellationToken cancellationToken = default);
 }
