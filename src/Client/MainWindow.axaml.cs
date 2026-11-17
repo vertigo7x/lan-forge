@@ -668,12 +668,29 @@ public partial class MainWindow : Window
         try
         {
             StatusText.Text = "Actualizando catálogo…";
+            RefreshCatalogButton.IsEnabled = false;
+
+            // Refresca contra el servidor: la sincronizacion vuelve a pedir el catalogo
+            // (y revalida la confianza ya fijada) antes de releer la copia local.
+            var result = await _session.SyncAsync(confirmNewServer: false);
             await RefreshCatalogAsync();
-            StatusText.Text = $"Catálogo actualizado: {_catalog.Count} títulos.";
+            StatusText.Text = $"Catálogo actualizado: {result.EntryCount} títulos.";
+        }
+        catch (TrustRequiredException)
+        {
+            StatusText.Text = "El servidor pide confirmar su fingerprint: usa Conectar para continuar.";
+        }
+        catch (FingerprintMismatchException ex)
+        {
+            StatusText.Text = $"El fingerprint del servidor cambió ({ex.Message}). Revisa el servidor antes de continuar.";
         }
         catch (Exception ex)
         {
             StatusText.Text = $"No se pudo actualizar el catálogo: {ex.Message}";
+        }
+        finally
+        {
+            RefreshCatalogButton.IsEnabled = true;
         }
     }
 
