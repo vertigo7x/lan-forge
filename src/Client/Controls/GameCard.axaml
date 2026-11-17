@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LanForge.Client.ViewModels"
+             x:Class="LanForge.Client.Controls.GameCard"
+             x:DataType="vm:GameCardItem">
+  <!-- game-card.uicomponent: cover 150 + body (title, meta/size, action / progress) -->
+  <Border Theme="{StaticResource Card}" ClipToBounds="True">
+    <StackPanel Spacing="0">
+      <Grid Height="150">
+        <Image Source="{Binding CoverAsset}" Stretch="UniformToFill"/>
+        <Border HorizontalAlignment="Right" VerticalAlignment="Top" Margin="10"
+                Background="#D90B0E13" CornerRadius="6" Padding="8,3">
+          <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="{Binding BadgeColor}"
+                     Text="{Binding BadgeText}"/>
+        </Border>
+      </Grid>
+      <StackPanel Spacing="10" Margin="12">
+        <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold"
+                   Foreground="{StaticResource TextPrimaryBrush}"/>
+        <Grid>
+          <TextBlock Text="{Binding Meta}" Theme="{StaticResource T.Caption}" HorizontalAlignment="Left"/>
+          <TextBlock Text="{Binding SizeText}" Theme="{StaticResource T.Caption}" HorizontalAlignment="Right"/>
+        </Grid>
+        <Button Name="ActionButton" Height="36"
+                IsVisible="{Binding IsActionVisible}"
+                Command="{Binding ActionCommand}"
+                Content="{Binding ActionText}"/>
+        <Button Theme="{StaticResource ButtonSecondary}" Height="32"
+                IsVisible="{Binding IsInstalledState}"
+                Command="{Binding UninstallCommand}"
+                Content="Desinstalar"/>
+        <StackPanel IsVisible="{Binding IsDownloading}" Spacing="8">
+          <Grid>
+            <TextBlock Name="PercentText" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{StaticResource InfoBrush}" HorizontalAlignment="Left"/>
+            <TextBlock Text="descargando…" Theme="{StaticResource T.Caption}" HorizontalAlignment="Right"/>
+          </Grid>
+          <Border Name="ProgressTrack" Height="6" CornerRadius="3"
+                  Background="{StaticResource Surface2Brush}">
+            <Border Name="ProgressFill" CornerRadius="3"
+                    Background="{StaticResource InfoBrush}" HorizontalAlignment="Left" Width="0"/>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</UserControl>

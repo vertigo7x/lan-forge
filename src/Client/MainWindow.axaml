@@ -1,0 +1,476 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="using:LanForge.Client.Controls"
+        xmlns:vm="using:LanForge.Client.ViewModels"
+        xmlns:chat="using:LanForge.Shared.Chat"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        x:Class="LanForge.Client.MainWindow"
+        Title="LAN Forge"
+        Width="1280" Height="800" MinWidth="1100" MinHeight="700"
+        Background="{StaticResource BgAppBrush}"
+        FontFamily="{StaticResource MiSans}">
+  <Grid RowDefinitions="48,*" ColumnDefinitions="232,*">
+    <!-- ===== Titlebar (cat.titlebar) ===== -->
+    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource BgTitlebarBrush}"
+            BorderBrush="{StaticResource BorderBrushDefault}" BorderThickness="0,0,0,1">
+      <Grid Margin="14,0">
+        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" HorizontalAlignment="Left">
+          <TextBlock Text="&#xf11b;" FontFamily="{StaticResource FaSolid}" FontSize="16"
+                     Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+          <TextBlock Text="LANFORGE" FontSize="13" FontWeight="Bold" LetterSpacing="2"
+                     Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+        </StackPanel>
+        <Border HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="{StaticResource Surface1Brush}" CornerRadius="16" Padding="14,5">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Ellipse Name="ServerDot" Width="7" Height="7" VerticalAlignment="Center" Fill="{StaticResource TextMutedBrush}"/>
+            <TextBlock Name="ServerNameText" Text="Sin conexión"
+                       FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+            <TextBlock Name="ServerAddressText" Theme="{StaticResource T.Caption}"/>
+            <Rectangle Width="1" Height="12" Fill="{StaticResource BorderBrushDefault}"/>
+            <TextBlock Name="ServerStateText" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{StaticResource InfoBrush}"/>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </Border>
+
+    <!-- ===== Sidebar (cat.sidebar) ===== -->
+    <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
+            BorderBrush="{StaticResource BorderBrushDefault}" BorderThickness="0,0,1,0">
+      <Grid Margin="12,16">
+        <StackPanel Spacing="4">
+          <TextBlock Text="MENÚ" FontSize="11" FontWeight="Bold" LetterSpacing="2"
+                     Foreground="{StaticResource TextMutedBrush}" Margin="12,0,12,8"/>
+          <Button x:Name="NavCatalog" Theme="{StaticResource NavItem}" Click="OnNavClick">
+            <TextBlock VerticalAlignment="Center">
+              <Run Text="&#xf11b;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
+              <Run Text="   Catálogo"/>
+            </TextBlock>
+          </Button>
+          <Button x:Name="NavChat" Theme="{StaticResource NavItem}" Click="OnNavClick">
+            <TextBlock VerticalAlignment="Center">
+              <Run Text="&#xf0c0;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
+              <Run Text="   Jugadores"/>
+            </TextBlock>
+          </Button>
+          <Button x:Name="NavDownloads" Theme="{StaticResource NavItem}" Click="OnNavClick">
+            <TextBlock VerticalAlignment="Center">
+              <Run Text="&#xf019;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
+              <Run Text="   Descargas"/>
+            </TextBlock>
+          </Button>
+          <Button x:Name="NavSettings" Theme="{StaticResource NavItem}" Click="OnNavClick">
+            <TextBlock VerticalAlignment="Center">
+              <Run Text="&#xf013;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
+              <Run Text="   Ajustes"/>
+            </TextBlock>
+          </Button>
+        </StackPanel>
+        <StackPanel VerticalAlignment="Bottom" Spacing="8">
+          <!-- cat.storage.card -->
+          <Border Theme="{StaticResource Card}" Padding="12">
+            <StackPanel Spacing="8">
+              <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="&#xf0a0;" FontFamily="{StaticResource FaSolid}" FontSize="13"
+                           Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                <TextBlock Text="Almacenamiento" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+              </StackPanel>
+              <Border Height="6" CornerRadius="3" Background="{StaticResource Surface2Brush}">
+                <Border x:Name="StorageFill" CornerRadius="3" Background="{StaticResource AccentBrush}"
+                        HorizontalAlignment="Left" Width="0"/>
+              </Border>
+              <TextBlock x:Name="StorageText" Theme="{StaticResource T.Caption}"/>
+            </StackPanel>
+          </Border>
+          <!-- cat.user.card -->
+          <Border Theme="{StaticResource Card}" Padding="12,10">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Border Width="32" Height="32" CornerRadius="16" Background="{StaticResource AccentSoftBrush}">
+                <TextBlock x:Name="UserInitials" FontSize="12" FontWeight="Bold"
+                           Foreground="{StaticResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Border>
+              <StackPanel Spacing="2">
+                <TextBlock x:Name="UserNameText" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                  <Ellipse Width="6" Height="6" Fill="{StaticResource SuccessBrush}" VerticalAlignment="Center"/>
+                  <TextBlock Text="En línea" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                </StackPanel>
+              </StackPanel>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- ===== Main ===== -->
+    <Grid Grid.Row="1" Grid.Column="1">
+
+      <!-- CATÁLOGO (screen.catalog / cat.main) -->
+      <ScrollViewer x:Name="CatalogView">
+        <StackPanel Spacing="20" Margin="28,24">
+          <Grid>
+            <StackPanel Spacing="4" HorizontalAlignment="Left">
+              <TextBlock Text="Catálogo de juegos" Theme="{StaticResource T.H1}"/>
+              <TextBlock x:Name="CatalogSubtitle" Theme="{StaticResource T.Body}"/>
+            </StackPanel>
+            <TextBox x:Name="SearchBox" Theme="{StaticResource InputDark}" Width="264"
+                     PlaceholderText="Buscar juegos…" HorizontalAlignment="Right"
+                     TextChanged="OnSearchChanged"/>
+          </Grid>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button x:Name="ChipAll" Theme="{StaticResource Chip}" Content="Todos" Click="OnChipClick"/>
+            <Button x:Name="ChipInstalled" Theme="{StaticResource Chip}" Content="Instalados" Click="OnChipClick"/>
+            <Button x:Name="ChipPending" Theme="{StaticResource Chip}" Content="Por descargar" Click="OnChipClick"/>
+          </StackPanel>
+          <!-- banner.featured -->
+          <Border CornerRadius="14" ClipToBounds="True" Height="184">
+            <Grid>
+              <Image Source="avares://LanForge.Client/Assets/hero-neon-drift.png" Stretch="UniformToFill"/>
+              <Border>
+                <Border.Background>
+                  <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+                    <GradientStop Offset="0" Color="#1A0B0E13"/>
+                    <GradientStop Offset="1" Color="#E60B0E13"/>
+                  </LinearGradientBrush>
+                </Border.Background>
+              </Border>
+              <Grid Margin="24" VerticalAlignment="Bottom">
+                <StackPanel Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Bottom">
+                  <Border Background="#B30B0E13" CornerRadius="6" Padding="10,4" HorizontalAlignment="Left">
+                    <TextBlock Text="DESTACADO DEL SERVIDOR" FontSize="11" FontWeight="Bold" LetterSpacing="1.5"
+                               Foreground="{StaticResource AccentBrush}"/>
+                  </Border>
+                  <TextBlock x:Name="BannerTitle" FontSize="28" FontWeight="Bold"
+                             Foreground="{StaticResource TextPrimaryBrush}"/>
+                  <TextBlock x:Name="BannerMeta" FontSize="13" Foreground="#CCE8EEF5"/>
+                </StackPanel>
+                <StackPanel Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                  <Button x:Name="BannerAction" Theme="{StaticResource ButtonPrimary}" Padding="20,0"
+                          Content="Instalar ahora" Click="OnBannerAction"/>
+                  <TextBlock x:Name="BannerHint" FontSize="12" Foreground="#B3E8EEF5" HorizontalAlignment="Right"/>
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+          <Grid>
+            <TextBlock Text="Todos los juegos" Theme="{StaticResource T.H2}" HorizontalAlignment="Left"/>
+            <TextBlock x:Name="SortText" Text="Ordenar por nombre" Theme="{StaticResource T.Caption}"
+                       HorizontalAlignment="Right"/>
+          </Grid>
+          <ItemsControl x:Name="GamesGrid">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemWidth="290" HorizontalAlignment="Left"/>
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:GameCardItem">
+                <controls:GameCard Margin="0,0,16,16"/>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- DESCARGAS -->
+      <ScrollViewer x:Name="DownloadsView" IsVisible="False">
+        <StackPanel Spacing="16" Margin="28,24">
+          <TextBlock Text="Descargas y operaciones" Theme="{StaticResource T.H1}"/>
+          <ListBox x:Name="OperationsList" Background="Transparent"/>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- JUGADORES / CHAT (screen.players + pl.chat) -->
+      <ScrollViewer x:Name="ChatView" IsVisible="False">
+        <StackPanel Spacing="20" Margin="28,24">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Jugadores" Theme="{StaticResource T.H1}"/>
+            <TextBlock x:Name="ChatSubtitle" Theme="{StaticResource T.Body}"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Left">
+            <!-- Columna izquierda: canales + conectados -->
+            <StackPanel Spacing="16" Width="268" HorizontalAlignment="Left">
+              <Border Theme="{StaticResource Card}" Padding="12">
+                <StackPanel Spacing="2">
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="6,4,6,8">
+                    <TextBlock Text="Canales" Theme="{StaticResource T.H2}"/>
+                    <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="10" Padding="8,2"
+                            HorizontalAlignment="Left" VerticalAlignment="Center">
+                      <TextBlock x:Name="ChannelCountText" FontSize="11" FontWeight="Bold"
+                                 Foreground="{StaticResource AccentBrush}"/>
+                    </Border>
+                  </StackPanel>
+                  <ListBox x:Name="ChannelsListBox" Background="Transparent" Height="140">
+                    <ListBox.ItemTemplate>
+                      <DataTemplate DataType="chat:ChatChannelInfo">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="4,6">
+                          <TextBlock Text="&#xf292;" FontFamily="{StaticResource FaSolid}" FontSize="11"
+                                     Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                     Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Text="{Binding Members, StringFormat='{}{0} en línea'}"
+                                     Theme="{StaticResource T.Caption}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ListBox.ItemTemplate>
+                  </ListBox>
+                  <Rectangle Height="1" Fill="{StaticResource BorderBrushDefault}" Margin="0,8"/>
+                  <TextBlock Text="CREAR SALA POR JUEGO" FontSize="11" FontWeight="Bold" LetterSpacing="2"
+                             Foreground="{StaticResource TextMutedBrush}" Margin="6,0,6,6"/>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ComboBox x:Name="GameForRoomBox" PlaceholderText="Elegir juego…"
+                              Width="180" Height="32"/>
+                    <Button Theme="{StaticResource ButtonSecondary}" Content="Crear"
+                            Click="OnCreateRoom"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <Border Theme="{StaticResource Card}" Padding="12">
+                <StackPanel Spacing="2">
+                  <StackPanel Orientation="Horizontal" Spacing="8" Margin="6,4,6,8">
+                    <TextBlock Text="Conectados" Theme="{StaticResource T.H2}"/>
+                    <Border Background="{StaticResource AccentSoftBrush}" CornerRadius="10" Padding="8,2"
+                            VerticalAlignment="Center">
+                      <TextBlock x:Name="MembersCountText" FontSize="11" FontWeight="Bold"
+                                 Foreground="{StaticResource AccentBrush}"/>
+                    </Border>
+                  </StackPanel>
+                  <ListBox x:Name="MembersListBox" Background="Transparent" Height="200"/>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+            <!-- Columna derecha: chat -->
+            <Border Theme="{StaticResource Card}" Width="620" Height="480" VerticalAlignment="Top">
+              <Grid RowDefinitions="Auto,*,Auto">
+                <!-- pl.chat.header -->
+                <Border Grid.Row="0" BorderBrush="{StaticResource BorderBrushDefault}"
+                        BorderThickness="0,0,0,1" Padding="16,12">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Text="&#xf292;" FontFamily="{StaticResource FaSolid}" FontSize="14"
+                               Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ChatChannelTitle" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ChatChannelSub" Theme="{StaticResource T.Caption}"
+                               VerticalAlignment="Center"/>
+                  </StackPanel>
+                </Border>
+                <!-- pl.chat.messages -->
+                <ScrollViewer Grid.Row="1" x:Name="MessagesScroll" Padding="16">
+                  <ItemsControl x:Name="MessagesList">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate DataType="chat:ChatMessage">
+                        <StackPanel Spacing="2" Margin="0,0,0,10">
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding Sender}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource AccentBrush}"/>
+                            <TextBlock Text="{Binding SentUtc, StringFormat='{}{0:HH:mm}'}"
+                                       Theme="{StaticResource T.Caption}"/>
+                          </StackPanel>
+                          <TextBlock Text="{Binding Text}" FontSize="13" TextWrapping="Wrap"
+                                     Foreground="{StaticResource TextPrimaryBrush}"/>
+                        </StackPanel>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </ScrollViewer>
+                <!-- pl.chat.inputbar -->
+                <Border Grid.Row="2" BorderBrush="{StaticResource BorderBrushDefault}"
+                        BorderThickness="0,1,0,0" Padding="16,12">
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBox x:Name="ChatInput" Theme="{StaticResource InputDark}" Width="500"
+                             PlaceholderText="Escribe un mensaje…"
+                             KeyDown="OnChatInputKeyDown"/>
+                    <Button x:Name="SendButton" Theme="{StaticResource ButtonPrimary}" Padding="18,0"
+                            Click="OnSendMessage">
+                      <TextBlock VerticalAlignment="Center">
+                        <Run Text="&#xf1d8;" FontFamily="{StaticResource FaSolid}" FontSize="14"/>
+                        <Run Text="  Enviar"/>
+                      </TextBlock>
+                    </Button>
+                  </StackPanel>
+                </Border>
+              </Grid>
+            </Border>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- AJUSTES (screen.settings) -->
+      <ScrollViewer x:Name="SettingsView" IsVisible="False">
+        <StackPanel Spacing="20" Margin="28,24">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Ajustes" Theme="{StaticResource T.H1}"/>
+            <TextBlock Text="Configura tu perfil de jugador y la conexión con el servidor"
+                       Theme="{StaticResource T.Body}"/>
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Left">
+            <!-- Columna izquierda -->
+            <StackPanel Spacing="16" Width="520" HorizontalAlignment="Left">
+              <!-- set.card.profile -->
+              <Border Theme="{StaticResource Card}" Padding="20">
+                <StackPanel Spacing="16">
+                  <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="&#xf007;" FontFamily="{StaticResource FaSolid}" FontSize="14"
+                                 Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                      <TextBlock Text="Perfil de jugador" Theme="{StaticResource T.H2}"/>
+                    </StackPanel>
+                    <TextBlock Text="Así te verán los demás jugadores de la sala"
+                               Theme="{StaticResource T.Caption}"/>
+                  </StackPanel>
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Nombre de usuario" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBox x:Name="PlayerNameBox" Theme="{StaticResource InputDark}" Height="40"/>
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="&#xf058;" FontFamily="{StaticResource FaSolid}" FontSize="12"
+                               Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="PlayerHintText" FontSize="12"
+                               Foreground="{StaticResource SuccessBrush}" Text="Nombre guardado localmente"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <!-- set.card.notif → Preferencias -->
+              <Border Theme="{StaticResource Card}" Padding="20">
+                <StackPanel Spacing="16">
+                  <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="&#xf0f3;" FontFamily="{StaticResource FaSolid}" FontSize="14"
+                                 Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                      <TextBlock Text="Preferencias" Theme="{StaticResource T.H2}"/>
+                    </StackPanel>
+                    <TextBlock Text="Comportamiento de la aplicación en la sala"
+                               Theme="{StaticResource T.Caption}"/>
+                  </StackPanel>
+                  <Grid>
+                    <StackPanel Spacing="3" HorizontalAlignment="Left">
+                      <TextBlock Text="Confirmar antes de desinstalar" FontSize="13" FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextPrimaryBrush}"/>
+                      <TextBlock Text="Pide confirmación antes de borrar juegos instalados"
+                                 FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                    </StackPanel>
+                    <ToggleButton x:Name="ToggleConfirmUninstall" Theme="{StaticResource SwitchToggle}"
+                                  HorizontalAlignment="Right"/>
+                  </Grid>
+                  <Rectangle Height="1" Fill="{StaticResource BorderBrushDefault}"/>
+                  <Grid>
+                    <StackPanel Spacing="3" HorizontalAlignment="Left">
+                      <TextBlock Text="Conexión automática" FontSize="13" FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextPrimaryBrush}"/>
+                      <TextBlock Text="Unirse al servidor de la sala al iniciar la aplicación"
+                                 FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                    </StackPanel>
+                    <ToggleButton x:Name="ToggleAutoConnect" Theme="{StaticResource SwitchToggle}"
+                                  HorizontalAlignment="Right"/>
+                  </Grid>
+                </StackPanel>
+              </Border>
+              <!-- set.footer -->
+              <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <Button x:Name="ResetSettingsButton" Theme="{StaticResource ButtonSecondary}"
+                        Content="Restablecer" Click="OnResetSettings"/>
+                <Button x:Name="SaveSettingsButton" Theme="{StaticResource ButtonPrimary}"
+                        Content="Guardar cambios" Click="OnSaveSettings"/>
+              </StackPanel>
+            </StackPanel>
+            <!-- Columna derecha -->
+            <StackPanel Spacing="16" Width="360" HorizontalAlignment="Left">
+              <!-- set.card.server -->
+              <Border Theme="{StaticResource Card}" Padding="20">
+                <StackPanel Spacing="14">
+                  <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="&#xf233;" FontFamily="{StaticResource FaSolid}" FontSize="14"
+                                 Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                      <TextBlock Text="Servidor local" Theme="{StaticResource T.H2}"/>
+                    </StackPanel>
+                  </StackPanel>
+                  <Border Background="#144ADE80" CornerRadius="8" Padding="12,10">
+                    <Grid>
+                      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                        <Border x:Name="ServerCardDot" Width="8" Height="8" CornerRadius="4"
+                                Background="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="ServerCardStatus" Text="Sin conexión" FontSize="13"
+                                   FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}"/>
+                      </StackPanel>
+                      <TextBlock x:Name="ServerCardGames" FontSize="12"
+                                 Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Right"/>
+                    </Grid>
+                  </Border>
+                  <Grid>
+                    <TextBlock Text="Servidor" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                    <TextBlock x:Name="SettingsServerName" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
+                  </Grid>
+                  <Grid>
+                    <TextBlock Text="Dirección IP" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                    <TextBlock x:Name="SettingsServerAddress" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
+                  </Grid>
+                  <Grid>
+                    <TextBlock Text="Puerto" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                    <TextBlock x:Name="SettingsServerPort" Text="8710" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
+                  </Grid>
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Fingerprint de confianza (verifícalo con el organizador):"
+                               Theme="{StaticResource T.Caption}"/>
+                    <SelectableTextBlock x:Name="SettingsFingerprint" FontFamily="Consolas" FontSize="12"
+                                         Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <!-- set.card.conn -->
+              <Border Theme="{StaticResource Card}" Padding="20">
+                <StackPanel Spacing="16">
+                  <StackPanel Spacing="4">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                      <TextBlock Text="&#xf1eb;" FontFamily="{StaticResource FaSolid}" FontSize="14"
+                                 Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                      <TextBlock Text="Opciones de conexión" Theme="{StaticResource T.H2}"/>
+                    </StackPanel>
+                  </StackPanel>
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Dirección del servidor" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextSecondaryBrush}"/>
+                    <TextBox x:Name="AddressBox" Theme="{StaticResource InputDark}" Height="40"
+                             PlaceholderText="IP:puerto (ej. 10.0.0.5:8710)"/>
+                  </StackPanel>
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ConnectButton" Theme="{StaticResource ButtonPrimary}" Padding="16,0"
+                            Content="Conectar" Click="OnConnect"/>
+                    <Button x:Name="DiscoverButton" Theme="{StaticResource ButtonSecondary}"
+                            Content="Buscar en LAN" Click="OnDiscover"/>
+                    <Button x:Name="TestConnectionButton" Theme="{StaticResource ButtonSecondary}"
+                            Content="Probar conexión" Click="OnTestConnection"/>
+                  </StackPanel>
+                  <ListBox x:Name="DiscoveredList" Background="Transparent" IsVisible="False"/>
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Estado" Theme="{StaticResource T.Caption}"/>
+                    <TextBlock x:Name="StatusText" Theme="{StaticResource T.Body}" TextWrapping="Wrap"/>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+              <!-- set.button.disconnect -->
+              <Button x:Name="ForgetButton" HorizontalAlignment="Stretch"
+                      Background="#14F87171" BorderBrush="#55F87171" BorderThickness="1"
+                      Foreground="{StaticResource DangerBrush}" FontWeight="SemiBold" Height="40"
+                      CornerRadius="8" Click="OnForgetServer">
+                <TextBlock VerticalAlignment="Center" HorizontalAlignment="Center">
+                  <Run Text="&#xe55e;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
+                  <Run Text="   Desconectar del servidor"/>
+                </TextBlock>
+              </Button>
+            </StackPanel>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
+</Window>

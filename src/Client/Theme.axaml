@@ -1,0 +1,188 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!-- Tokens del design (docs: .kimi-design/.../index.kui) -->
+  <Color x:Key="BgApp">#0B0E13</Color>
+  <Color x:Key="BgTitlebar">#0F131A</Color>
+  <Color x:Key="BgSidebar">#0D1117</Color>
+  <Color x:Key="Surface1">#141A23</Color>
+  <Color x:Key="Surface2">#1C2430</Color>
+  <Color x:Key="BorderDefault">#232D3B</Color>
+  <Color x:Key="TextPrimary">#E8EEF5</Color>
+  <Color x:Key="TextSecondary">#9AA8B8</Color>
+  <Color x:Key="TextMuted">#64748B</Color>
+  <Color x:Key="AccentDefault">#A3E635</Color>
+  <Color x:Key="AccentSoft">#1FA3E635</Color> <!-- accent.default al 12% (del design) -->
+  <Color x:Key="AccentOn">#16210A</Color>
+  <Color x:Key="InfoDefault">#38BDF8</Color>
+  <Color x:Key="SuccessDefault">#4ADE80</Color>
+  <Color x:Key="WarningDefault">#FBBF24</Color>
+  <Color x:Key="DangerDefault">#F87171</Color>
+
+  <SolidColorBrush x:Key="BgAppBrush" Color="{StaticResource BgApp}"/>
+  <SolidColorBrush x:Key="BgTitlebarBrush" Color="{StaticResource BgTitlebar}"/>
+  <SolidColorBrush x:Key="BgSidebarBrush" Color="{StaticResource BgSidebar}"/>
+  <SolidColorBrush x:Key="Surface1Brush" Color="{StaticResource Surface1}"/>
+  <SolidColorBrush x:Key="Surface2Brush" Color="{StaticResource Surface2}"/>
+  <SolidColorBrush x:Key="BorderBrushDefault" Color="{StaticResource BorderDefault}"/>
+  <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimary}"/>
+  <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
+  <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}"/>
+  <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentDefault}"/>
+  <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoft}"/>
+  <SolidColorBrush x:Key="AccentOnBrush" Color="{StaticResource AccentOn}"/>
+  <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource InfoDefault}"/>
+  <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessDefault}"/>
+  <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningDefault}"/>
+  <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerDefault}"/>
+
+  <!-- Tipografía del design (MiSans, empaquetada en Assets) -->
+  <FontFamily x:Key="MiSans">avares://LanForge.Client/Assets/MiSans.ttf#MiSans</FontFamily>
+
+  <!-- Iconos monocromo estilo Kimi Design (Font Awesome 6 Free Solid, empaquetado en Assets) -->
+  <FontFamily x:Key="FaSolid">avares://LanForge.Client/Assets/fa-solid-900.ttf#Font Awesome 6 Free</FontFamily>
+
+  <ControlTheme x:Key="T.H1" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontSize" Value="22"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+  </ControlTheme>
+  <ControlTheme x:Key="T.H2" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+  </ControlTheme>
+  <ControlTheme x:Key="T.Body" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+  </ControlTheme>
+  <ControlTheme x:Key="T.Caption" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+  </ControlTheme>
+
+  <!-- Botón primario (accent) del design -->
+  <ControlTheme x:Key="ButtonPrimary" TargetType="Button">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+    <Setter Property="Foreground" Value="{StaticResource AccentOnBrush}"/>
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontWeight" Value="Bold"/>
+    <Setter Property="FontSize" Value="14"/>
+    <Setter Property="Height" Value="44"/>
+    <Setter Property="CornerRadius" Value="10"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </ControlTheme>
+
+  <!-- Botón secundario (surface) del design -->
+  <ControlTheme x:Key="ButtonSecondary" TargetType="Button">
+    <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Height" Value="38"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </ControlTheme>
+
+  <!-- Chip de filtro. El estado activo se marca con la clase "active". -->
+  <ControlTheme x:Key="Chip" TargetType="Button">
+    <Setter Property="Background" Value="{StaticResource Surface1Brush}"/>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="Height" Value="32"/>
+    <Setter Property="Padding" Value="14,0"/>
+    <Setter Property="CornerRadius" Value="16"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Style Selector="^.active">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Item de navegación (sidebar). El estado activo se marca con la clase "active". -->
+  <ControlTheme x:Key="NavItem" TargetType="Button">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Height" Value="40"/>
+    <Setter Property="HorizontalContentAlignment" Value="Left"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="12,0"/>
+    <Style Selector="^.active">
+      <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- TextBox del design (search / campos) -->
+  <ControlTheme x:Key="InputDark" TargetType="TextBox">
+    <Setter Property="Background" Value="{StaticResource Surface1Brush}"/>
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Height" Value="38"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="Padding" Value="12,0"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </ControlTheme>
+
+  <!-- Switch del design (44x24, knob 18, accent al activar) -->
+  <ControlTheme x:Key="SwitchToggle" TargetType="ToggleButton">
+    <Setter Property="Width" Value="44"/>
+    <Setter Property="Height" Value="24"/>
+    <Setter Property="CornerRadius" Value="12"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+    <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+    <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Content">
+      <Template>
+        <Border Width="18" Height="18" CornerRadius="9" Margin="3,0,0,0"
+                Background="{StaticResource TextMutedBrush}" HorizontalAlignment="Left"/>
+      </Template>
+    </Setter>
+    <Style Selector="^:checked">
+      <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Content">
+        <Template>
+          <Border Width="18" Height="18" CornerRadius="9" Margin="0,0,3,0"
+                  Background="{StaticResource AccentOnBrush}" HorizontalAlignment="Right"/>
+        </Template>
+      </Setter>
+    </Style>
+  </ControlTheme>
+
+  <ControlTheme x:Key="Card" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource Surface1Brush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="12"/>
+  </ControlTheme>
+
+  <ControlTheme x:Key="CardInner" TargetType="Border">
+    <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushDefault}"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="CornerRadius" Value="8"/>
+  </ControlTheme>
+</ResourceDictionary>

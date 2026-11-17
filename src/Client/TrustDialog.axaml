@@ -1,0 +1,26 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LanForge.Client.TrustDialog"
+        Title="Confirmar fingerprint del servidor"
+        Width="560" Height="240" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgAppBrush}"
+        FontFamily="{StaticResource MiSans}">
+  <StackPanel Margin="24" Spacing="12">
+    <TextBlock Text="Servidor nuevo detectado" Theme="{StaticResource T.H1}"/>
+    <TextBlock x:Name="MessageText" Theme="{StaticResource T.Body}" TextWrapping="Wrap"/>
+    <StackPanel Spacing="6">
+      <TextBlock Text="Fingerprint presentado (verifícalo con el organizador fuera de banda):"
+                 Theme="{StaticResource T.Caption}"/>
+      <Border Theme="{StaticResource Card}" Padding="12">
+        <SelectableTextBlock x:Name="FingerprintText" FontFamily="Consolas" FontSize="12"
+                             Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap"/>
+      </Border>
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button x:Name="RejectButton" Theme="{StaticResource ButtonSecondary}" Width="120"
+              Content="Rechazar" Click="OnReject"/>
+      <Button x:Name="AcceptButton" Theme="{StaticResource ButtonPrimary}" Width="200"
+              Content="Confiar y sincronizar" Click="OnAccept"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

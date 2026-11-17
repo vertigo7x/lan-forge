@@ -1,0 +1,18 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LanForge.Client.ConfirmDialog"
+        Title="Confirmar"
+        Width="440" Height="190" WindowStartupLocation="CenterOwner"
+        Background="{StaticResource BgAppBrush}"
+        FontFamily="{StaticResource MiSans}">
+  <StackPanel Margin="24" Spacing="14">
+    <TextBlock x:Name="TitleText" Theme="{StaticResource T.H1}"/>
+    <TextBlock x:Name="MessageText" Theme="{StaticResource T.Body}" TextWrapping="Wrap"/>
+    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+      <Button x:Name="CancelButton" Theme="{StaticResource ButtonSecondary}" Width="110"
+              Content="Cancelar" Click="OnCancel"/>
+      <Button x:Name="AcceptButton" Theme="{StaticResource ButtonPrimary}" Padding="20,0"
+              Content="Desinstalar" Click="OnAccept"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

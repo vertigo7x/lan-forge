@@ -1,0 +1,16 @@
+# Build
+bin/
+obj/
+artifacts/
+out/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+
+# OS
+Thumbs.db
+.DS_Store
+.tools/
+.kimi-design
