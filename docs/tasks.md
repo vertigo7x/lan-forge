@@ -115,3 +115,17 @@ Basado en `docs/plan.md`. Objetivo: plataforma de escritorio local para gestiona
 - [x] 6.1 Transferencia por ZIP: el servidor empaqueta cada juego en un `.zip`; el cliente descarga el zip (reanudable), lo extrae en staging (con protección ZipSlip), valida firma+sha256 por archivo, instala y borra zip/staging.
 - [x] 6.2 Imágenes de juegos alojadas en el servidor: subida en la app del organizador, servidas por HTTP (`GET /api/v1/covers/{gameId}`), referenciadas en el catálogo; el cliente las cachea con fallback a las portadas del design.
 - [x] 6.3 Chat SignalR: hub en el servidor, canal `#general` permanente + salas efímeras por juego (se borran al quedar vacías, sin historial); la app del servidor lista los canales activos; UI del cliente basada en `screen.players` del design (canales + conectados + mensajes + input).
+
+## Fase 7 — Arreglos y mejoras 17/11/2026 (plan.md)
+
+### Bugs
+- [x] 7.1 Catálogo del cliente: las imágenes no se muestran (`MainWindow.axaml.cs`: `CoverFor`/`GetCachedCoverPath`/`EnsureServerCoversAsync`; `GameCard.axaml` binds `CoverAsset`).
+- [x] 7.2 Chat: al crear un canal se muestra el `gameId` en lugar del nombre del juego (`MainWindow.axaml.cs`: `ChannelDisplayName`).
+- [x] 7.3 Chat: el área de chat no es responsive y el botón "Enviar" queda fuera del área (`MainWindow.axaml`: `ChatInput` con `Width="500"` fijo).
+- [x] 7.4 Ajustes: la etiqueta "Nombre de usuario" no tiene campo editable (`MainWindow.axaml`: `PlayerNameBox`).
+- [x] 7.5 Ajustes: los botones "Restablecer" y "Guardar cambios" necesitan padding para que las etiquetas no toquen los bordes (`MainWindow.axaml`: `ResetSettingsButton`, `SaveSettingsButton`).
+
+### Mejoras
+- [x] 7.6 Catálogo: botón para actualizar el catálogo del servidor.
+- [x] 7.7 Catálogo: "Ordenar por nombre" es un `TextBlock` inerte; convertirlo en botón funcional (`MainWindow.axaml`: `SortText`).
+- [x] 7.8 Servidor: opción para borrar paquetes de juegos (endpoint + store + UI).

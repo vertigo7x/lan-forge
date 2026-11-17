@@ -140,6 +140,31 @@ public sealed class CatalogService
         return fileName;
     }
 
+    /// <summary>
+    /// Borra un juego del catalogo: el paquete publicado, el .zip en disco, su portada
+    /// y las filas del store. Es la operacion que usa el organizador para quitar un juego.
+    /// </summary>
+    public async Task<bool> DeleteGameAsync(string gameId, ICoverStore covers, CancellationToken cancellationToken = default)
+    {
+        GameId.Validate(gameId);
+        var game = await _store.GetGameAsync(gameId, cancellationToken);
+        var package = await _store.GetPackageAsync(gameId, cancellationToken);
+        if (game is null && package is null)
+        {
+            return false;
+        }
+
+        await _content.DeleteArchiveAsync(gameId, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(game?.CoverFile))
+        {
+            await covers.DeleteAsync(game.CoverFile, cancellationToken);
+        }
+
+        await _store.DeleteGameAsync(gameId, cancellationToken);
+        await WriteLogAsync(null, "catalog.delete", LogSeverity.Info, $"Juego eliminado del catalogo: {gameId}", cancellationToken);
+        return true;
+    }
+
     public async Task<SignedPackageManifest?> GetManifestAsync(string packageId, CancellationToken cancellationToken = default)
     {
         var package = await _store.GetPackageAsync(packageId, cancellationToken);

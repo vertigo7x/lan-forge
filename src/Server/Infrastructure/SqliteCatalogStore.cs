@@ -113,6 +113,38 @@ public sealed class SqliteCatalogStore : ICatalogStore, IDisposable
         }
     }
 
+    public async Task<bool> DeleteGameAsync(string gameId, CancellationToken cancellationToken = default)
+    {
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var transaction = (SqliteTransaction)await _connection.BeginTransactionAsync(cancellationToken);
+            var affected = 0;
+            await using (var deletePackages = _connection.CreateCommand())
+            {
+                deletePackages.Transaction = transaction;
+                deletePackages.CommandText = "DELETE FROM packages WHERE game_id = $id;";
+                deletePackages.Parameters.AddWithValue("$id", gameId);
+                affected += await deletePackages.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await using (var deleteGame = _connection.CreateCommand())
+            {
+                deleteGame.Transaction = transaction;
+                deleteGame.CommandText = "DELETE FROM games WHERE game_id = $id;";
+                deleteGame.Parameters.AddWithValue("$id", gameId);
+                affected += await deleteGame.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+            return affected > 0;
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
+    }
+
     public async Task<Package?> GetPackageAsync(string packageId, CancellationToken cancellationToken = default)
     {
         await using var command = CreatePackageSelect("WHERE p.package_id = $id");
