@@ -61,8 +61,9 @@ public sealed class CatalogServiceTests : IDisposable
         var empty = Path.Combine(_temp.Path, "empty");
         Directory.CreateDirectory(empty);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var error = await Assert.ThrowsAsync<EmptySourceDirectoryException>(
             () => service.PublishPackageAsync("game", "Game", "1.0", empty, "game.exe"));
+        Assert.IsAssignableFrom<InvalidOperationException>(error);
     }
 
     [Fact]
@@ -81,8 +82,34 @@ public sealed class CatalogServiceTests : IDisposable
         var v1 = _temp.CreateSourceDirectory(("a.exe", "a"));
 
         await service.PublishPackageAsync("game", "Game", "1.0", v1, "a.exe");
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var error = await Assert.ThrowsAsync<PackageVersionConflictException>(
             () => service.PublishPackageAsync("game", "Game", "1.0", v1, "a.exe"));
+        Assert.IsAssignableFrom<InvalidOperationException>(error);
+    }
+
+    [Fact]
+    public async Task Publish_EntryPoint_inexistente_Throws_y_no_deja_zip_huerfano()
+    {
+        var service = CreateService();
+        var source = _temp.CreateSourceDirectory(("a.exe", "a"));
+
+        var error = await Assert.ThrowsAsync<ArgumentException>(
+            () => service.PublishPackageAsync("game", "Game", "1.0", source, "no-existe.exe"));
+
+        Assert.Equal("entryPoint", error.ParamName);
+        Assert.False(File.Exists(Path.Combine(_temp.Path, "packages", "game.zip")));
+        Assert.Null(await service.GetManifestAsync("game"));
+    }
+
+    [Fact]
+    public async Task GetPublishedVersion_Devuelve_la_version_actual_o_null()
+    {
+        var service = CreateService();
+        var source = _temp.CreateSourceDirectory(("a.exe", "a"));
+
+        Assert.Null(await service.GetPublishedVersionAsync("game"));
+        await service.PublishPackageAsync("game", "Game", "1.0", source, "a.exe");
+        Assert.Equal("1.0", await service.GetPublishedVersionAsync("game"));
     }
 
     [Fact]
