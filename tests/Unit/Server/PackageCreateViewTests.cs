@@ -16,6 +16,10 @@ public sealed class PackageCreateViewTests(HeadlessServerFixture fixture)
     [Fact]
     public void El_formulario_muestra_todos_los_campos_del_paquete()
     {
+        // El fixture deja el contenedor de servicios del servidor disponible: la
+        // vista se construye con el cliente real resuelto desde el contenedor.
+        Assert.NotNull(fixture.Services);
+
         var (_, window) = ShowView(new SuccessfulPackageCreationService());
 
         TextBox[] textBoxes = [];
