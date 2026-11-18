@@ -35,6 +35,7 @@ public static class ServerWebHost
         builder.Services.AddSingleton<IServerLog>(
             new JsonlServerLog(options.DataDirectory));
         builder.Services.AddSingleton<CatalogService>();
+        builder.Services.AddSingleton<CreatePackageUseCase>();
 
         var app = builder.Build();
         app.MapHub<ChatHub>(ChatHub.Path);

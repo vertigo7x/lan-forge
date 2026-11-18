@@ -73,7 +73,7 @@ public sealed class CatalogService
         var existing = await _store.GetPackageAsync(gameId, cancellationToken);
         if (existing is not null && string.Equals(existing.Version, packageVersion.Value, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException($"Ya está publicada la versión '{version}' de '{gameId}'.");
+            throw new PackageVersionConflictException(gameId, packageVersion.Value);
         }
 
         // La fila del juego puede existir aunque todavia no haya paquete (el organizador
@@ -84,7 +84,15 @@ public sealed class CatalogService
         var files = await HashFilesAsync(source, cancellationToken);
         if (files.Count == 0)
         {
-            throw new InvalidOperationException($"El directorio fuente no contiene archivos: '{sourceDirectory}'.");
+            throw new EmptySourceDirectoryException(sourceDirectory);
+        }
+
+        // El punto de entrada se comprueba antes de importar el contenido: si no existe
+        // entre los archivos, el paquete se rechaza sin dejar un zip huerfano en el store.
+        var normalizedEntryPoint = ManifestFileEntry.ValidatePath(entryPoint);
+        if (!files.Any(f => f.Path == normalizedEntryPoint))
+        {
+            throw new ArgumentException($"El punto de entrada '{entryPoint}' no existe en la lista de archivos.", nameof(entryPoint));
         }
 
         await _content.ImportArchiveAsync(gameId, source.FullName, cancellationToken);
@@ -134,6 +142,16 @@ public sealed class CatalogService
 
         await WriteLogAsync(null, "catalog.publish", LogSeverity.Info, $"Publicado {gameId} v{packageVersion.Value} ({files.Count} archivos)", cancellationToken);
         return new CatalogEntry(gameId, title, gameId, packageVersion.Value, package.TotalSizeBytes, package.FileCount);
+    }
+
+    /// <summary>
+    /// Versión publicada actualmente para un juego (null si todavía no tiene paquete).
+    /// Permite saber si una publicación va a crear el paquete o a reemplazar otro.
+    /// </summary>
+    public async Task<string?> GetPublishedVersionAsync(string gameId, CancellationToken cancellationToken = default)
+    {
+        var package = await _store.GetPackageAsync(gameId, cancellationToken);
+        return package?.Version;
     }
 
     /// <summary>
