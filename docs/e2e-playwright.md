@@ -2,7 +2,7 @@
 
 Suite end-to-end de LAN Forge. Levanta el **servidor real** (Kestrel, el mismo
 host HTTP que usa la app de escritorio), espera a que responda y ejecuta las
-pruegas contra su API real.
+pruebas contra su API real.
 
 ## Por qué Playwright y no Cypress
 
@@ -120,6 +120,41 @@ completo: la vista real rellena y envia contra el endpoint real, y comprueba la
 confirmacion en pantalla, la peticion que llego al endpoint y que el paquete
 quedo publicado.
 
+### Caso de fallo de validacion del formulario
+
+El caso e2e de fallo de validacion esta repartido entre las dos superficies:
+
+- `tests/Unit/Server/PackageCreateValidationFailureE2ETests.cs` — **frontera de
+  UI**. Monta el formulario real de Avalonia con el endpoint sustituido por un
+  stub HTTP que responde `400 validation_failed` con un error por campo
+  (obligatorio vacio, formato incorrecto y ruta fuera de rango). Comprueba que
+  la peticion sale, que **cada** mensaje aparece en el control de error de **su**
+  campo (`TitleErrorText`, `VersionErrorText`, `SourceDirectoryErrorText`, …: el
+  equivalente Avalonia de `data-testid`/`aria-describedby`) y que el usuario no
+  ve confirmacion de exito ni es redirigido. Incluye el caso de datos invalidos
+  que la validacion local corta antes de salir: los mensajes salen junto a su
+  campo y el endpoint no llega a llamarse.
+- `e2e/validation-failure.spec.ts` — **frontera de red** contra el servidor
+  real: `POST /api/v1/packages` con datos invalidos responde `400` con
+  `validation_failed` y un error por campo (`required`, `invalid_format`,
+  `invalid_path`, `too_long`), y una peticion invalida no deja ningun paquete en
+  el catalogo.
+
+### Caso de envio duplicado
+
+El caso e2e de envio duplicado tambien esta repartido entre las dos superficies:
+
+- `tests/Unit/Server/PackageCreateDuplicateSubmissionE2ETests.cs` — **frontera
+  de UI**. Con el formulario y el boton reales de Avalonia y un stub HTTP que
+  cuenta las peticiones que llegan al endpoint: un doble click y varios clicks
+  seguidos lanzan **exactamente una** peticion. La prueba esta validada como no
+  vacia: al desactivar temporalmente las dos guardas del producto
+  (`DelegateCommand` ocupado y `PackageCreateViewModel.IsSubmitting`) el doble
+  click pasa a lanzar dos peticiones y la prueba falla.
+- `e2e/duplicate-submission.spec.ts` — **frontera de red** contra el servidor
+  real: la segunda peticion del mismo juego y version recibe `409` y no
+  duplica la publicacion en el catalogo.
+
 Lo que si aporta la suite de Playwright es la otra mitad del flujo: que el
 servidor real acepte la peticion, valide los campos, publique el paquete y lo
 sirva en el catalogo. Para "evitar el envio duplicado" hay que combinar ambas
@@ -156,8 +191,10 @@ respuesta.
 
 ```
 e2e/
-  smoke.spec.ts     # prueba de humo: la app carga
-  network.spec.ts   # verificacion de llamadas de red
+  smoke.spec.ts                # prueba de humo: la app carga
+  network.spec.ts              # verificacion de llamadas de red
+  validation-failure.spec.ts   # caso e2e de fallo de validacion (frontera de red)
+  duplicate-submission.spec.ts # caso e2e de envio duplicado (frontera de red)
 playwright.config.ts
 package.json
 tsconfig.json
