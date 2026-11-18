@@ -13,4 +13,5 @@ public sealed record CreatePackageResponse(
     string? Arguments,
     long TotalSizeBytes,
     int FileCount,
-    DateTimeOffset CreatedUtc);
+    DateTimeOffset CreatedUtc,
+    string? PreviousVersion = null);

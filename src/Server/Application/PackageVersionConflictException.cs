@@ -3,7 +3,7 @@ namespace LanForge.Server.Application;
 /// <summary>
 /// Conflicto de publicación: la versión indicada ya está publicada para ese juego.
 /// Hereda de <see cref="InvalidOperationException"/> para no romper a quien la
-///捕获aba como error genérico de publicación.
+/// capturaba como error genérico de publicación.
 /// </summary>
 public sealed class PackageVersionConflictException : InvalidOperationException
 {
