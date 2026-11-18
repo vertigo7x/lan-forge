@@ -104,10 +104,21 @@ headless de Avalonia que ya existe en el repo:
 - `HeadlessAvalonia.RunOnUiThread(...)` para ejecutar codigo en el hilo de UI.
 - `HeadlessAvalonia.RunUiJobs()` para vaciar la cola del dispatcher.
 
+> **Ojo con la coleccion**: la sesion headless de Avalonia es un singleton por
+> proceso y hay dos colecciones con fixtures que la arrancan (`Cliente-UI` y
+> `Servidor-UI`). Si las dos arrancan a la vez, gana la que llegue primero y la
+> otra acaba construyendo sus ventanas en el hilo equivocado. Las pruebas de UI
+> del servidor van en `Cliente-UI`, que es la que declara las dos fixtures. Ver
+> `docs/e2e-creacion-paquetes.md`.
+
 Ejemplo de referencia: `tests/Unit/Server/PackageCreateViewComponentTests.cs`
 (rellena el formulario, envia y comprueba los errores por campo) y
 `tests/Unit/Server/PackageCreateViewModelEndpointTests.cs` (la misma vista
 contra el endpoint real, sin doblar la capa de servicio).
+`tests/Unit/Server/PackageCreateSuccessE2ETests.cs` es el caso de exito
+completo: la vista real rellena y envia contra el endpoint real, y comprueba la
+confirmacion en pantalla, la peticion que llego al endpoint y que el paquete
+quedo publicado.
 
 Lo que si aporta la suite de Playwright es la otra mitad del flujo: que el
 servidor real acepte la peticion, valide los campos, publique el paquete y lo
