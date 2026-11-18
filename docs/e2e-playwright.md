@@ -109,6 +109,26 @@ Ejemplo de referencia: `tests/Unit/Server/PackageCreateViewComponentTests.cs`
 `tests/Unit/Server/PackageCreateViewModelEndpointTests.cs` (la misma vista
 contra el endpoint real, sin doblar la capa de servicio).
 
+### Caso de fallo de validacion del formulario
+
+El caso e2e de fallo de validacion esta repartido entre las dos superficies:
+
+- `tests/Unit/Server/PackageCreateValidationFailureE2ETests.cs` — **frontera de
+  UI**. Monta el formulario real de Avalonia con el endpoint sustituido por un
+  stub HTTP que responde `400 validation_failed` con un error por campo
+  (obligatorio vacio, formato incorrecto y ruta fuera de rango). Comprueba que
+  la peticion sale, que **cada** mensaje aparece en el control de error de **su**
+  campo (`TitleErrorText`, `VersionErrorText`, `SourceDirectoryErrorText`, …: el
+  equivalente Avalonia de `data-testid`/`aria-describedby`) y que el usuario no
+  ve confirmacion de exito ni es redirigido. Incluye el caso de datos invalidos
+  que la validacion local corta antes de salir: los mensajes salen junto a su
+  campo y el endpoint no llega a llamarse.
+- `e2e/validation-failure.spec.ts` — **frontera de red** contra el servidor
+  real: `POST /api/v1/packages` con datos invalidos responde `400` con
+  `validation_failed` y un error por campo (`required`, `invalid_format`,
+  `invalid_path`, `too_long`), y una peticion invalida no deja ningun paquete en
+  el catalogo.
+
 Lo que si aporta la suite de Playwright es la otra mitad del flujo: que el
 servidor real acepte la peticion, valide los campos, publique el paquete y lo
 sirva en el catalogo. Para "evitar el envio duplicado" hay que combinar ambas
@@ -145,8 +165,9 @@ respuesta.
 
 ```
 e2e/
-  smoke.spec.ts     # prueba de humo: la app carga
-  network.spec.ts   # verificacion de llamadas de red
+  smoke.spec.ts              # prueba de humo: la app carga
+  network.spec.ts            # verificacion de llamadas de red
+  validation-failure.spec.ts  # caso e2e de fallo de validacion (frontera de red)
 playwright.config.ts
 package.json
 tsconfig.json
