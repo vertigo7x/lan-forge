@@ -12,7 +12,7 @@ public sealed class CatalogServiceTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private CatalogService CreateService(InMemoryCatalogStore? store = null)
+    private CatalogService CreateService(ICatalogStore? store = null)
     {
         store ??= new InMemoryCatalogStore();
         var content = new FilePackageContentStore(Path.Combine(_temp.Path, "packages"));
@@ -240,6 +240,30 @@ public sealed class CatalogServiceTests : IDisposable
         Assert.Equal(2, entries.Count);
         Assert.Contains(entries, e => e.GameId == "alpha" && e.TotalSizeBytes == 2);
         Assert.Contains(entries, e => e.GameId == "beta" && e.Version == "2.0");
+    }
+
+    [Fact]
+    public async Task ListCatalog_LeeLosJuegosUnaSolaVez_NoHaceNMasUna()
+    {
+        // El endpoint de catalogo lo llaman todos los clientes en cada sincronizacion:
+        // leer los juegos una vez por paquete (N+1) multiplicaba las consultas por el
+        // numero de juegos publicados.
+        var store = new CountingCatalogStore();
+        var service = CreateService(store);
+        var sourceA = _temp.CreateSourceDirectory(("a.exe", "aa"));
+        var sourceB = _temp.CreateSourceDirectory(("b.exe", "bbb"));
+        var sourceC = _temp.CreateSourceDirectory(("c.exe", "cccc"));
+
+        await service.PublishPackageAsync("alpha", "Alpha", "1.0", sourceA, "a.exe");
+        await service.PublishPackageAsync("beta", "Beta", "2.0", sourceB, "b.exe");
+        await service.PublishPackageAsync("gamma", "Gamma", "3.0", sourceC, "c.exe");
+
+        store.ResetCounters();
+        var entries = await service.ListCatalogAsync();
+
+        Assert.Equal(3, entries.Count);
+        Assert.Equal(1, store.ListGamesCalls);
+        Assert.Equal(0, store.GetGameCalls);
     }
 
     [Fact]

@@ -121,13 +121,25 @@ public sealed class CatalogService
         return new CatalogEntry(gameId, title, gameId, packageVersion.Value, package.TotalSizeBytes, package.FileCount);
     }
 
+    /// <summary>
+    /// Devuelve el catalogo para los clientes. Lee los juegos una sola vez y los empareja
+    /// en memoria: antes hacia una consulta a <c>games</c> por cada paquete (N+1), y este
+    /// es el endpoint que todos los clientes llaman en cada sincronizacion.
+    /// </summary>
     public async Task<IReadOnlyList<CatalogEntry>> ListCatalogAsync(CancellationToken cancellationToken = default)
     {
         var packages = await _store.ListLatestPackagesAsync(cancellationToken);
+        var games = await _store.ListGamesAsync(cancellationToken);
+        var gamesById = new Dictionary<string, Game>(games.Count, StringComparer.Ordinal);
+        foreach (var game in games)
+        {
+            gamesById[game.Id] = game;
+        }
+
         var entries = new List<CatalogEntry>(packages.Count);
         foreach (var package in packages)
         {
-            var game = await _store.GetGameAsync(package.GameId, cancellationToken);
+            gamesById.TryGetValue(package.GameId, out var game);
             entries.Add(new CatalogEntry(
                 package.GameId,
                 game?.Title ?? package.GameId,
