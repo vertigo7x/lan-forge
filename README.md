@@ -51,3 +51,6 @@ dotnet test tests/E2E
 | Cliente | `%AppData%\LanForge\Client` — `lanforge-client.db`, `games/{gameId}/{version}/`, `downloads/` (staging temporal), `logs/*.jsonl` |
 
 Documentación de diseño y plan: [`docs/plan.md`](docs/plan.md), [`docs/tasks.md`](docs/tasks.md).
+
+Cambios de calidad del servidor y su trazabilidad con la auditoría:
+[`docs/cambios-servidor-8-1.md`](docs/cambios-servidor-8-1.md).
