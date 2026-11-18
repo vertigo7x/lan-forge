@@ -81,7 +81,11 @@ public sealed class ServerUiTests(HeadlessServerFixture fixture)
 
                 // La publicacion arranca en segundo plano: en cuanto se ha lanzado, el boton
                 // tiene que estar deshabilitado mientras dura.
-                HeadlessClientFixture.DrainUiQueue();
+                //
+                // El boton se deshabilita de forma sincrona (SetPublishing va antes del
+                // primer await), asi que se comprueba sin drenar antes la cola: al drenar,
+                // una maquina rapida puede terminar la publicacion entera y volver a
+                // habilitar el boton, y el test fallaba por carrera.
                 Assert.False(publish.IsEnabled);
                 Assert.False(window.FindControl<Button>("BrowseButton")!.IsEnabled);
                 Assert.False(window.FindControl<Button>("BrowseCoverButton")!.IsEnabled);
