@@ -42,4 +42,11 @@ public sealed class GameLauncher
 
         _starter.Start(entryPoint, game.Arguments, game.InstallPath);
     }
+
+    /// <summary>Lanza un juego de Steam a través de su URI steam://run/&lt;appid&gt;.</summary>
+    public void Launch(SteamGame game)
+    {
+        var workingDirectory = Directory.Exists(game.InstallPath) ? game.InstallPath : Path.GetTempPath();
+        _starter.Start(game.LaunchCommand, null, workingDirectory);
+    }
 }
