@@ -13,6 +13,9 @@ public static class ApiEndpoints
     public const string ClientIdHeader = "X-LanForge-Client-Id";
     public const string OperationIdHeader = "X-LanForge-Operation-Id";
 
+    /// <summary>Clave en HttpContext.Items donde se cachea el identificador de operacion resuelto.</summary>
+    private const string OperationIdItemKey = "LanForge.OperationId";
+
     public static void MapLanForgeApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/v1");
@@ -155,25 +158,46 @@ public static class ApiEndpoints
             ? values.First()
             : null;
 
+    /// <summary>
+    /// Resuelve el identificador de operacion de la peticion. Se resuelve una sola vez por
+    /// peticion y se guarda en <see cref="HttpContext.Items"/>: la operacion registrada, la
+    /// linea de log y la cabecera de respuesta llevan SIEMPRE el mismo identificador, sea el
+    /// que propose el cliente o uno generado por el servidor.
+    /// </summary>
     private static string GetOrCreateOperationId(HttpContext context)
     {
+        if (context.Items.TryGetValue(OperationIdItemKey, out var cached) && cached is string cachedId)
+        {
+            return cachedId;
+        }
+
+        string operationId;
         if (context.Request.Headers.TryGetValue(OperationIdHeader, out var values) &&
             !string.IsNullOrWhiteSpace(values.FirstOrDefault()))
         {
-            return values.First()!;
+            operationId = values.First()!;
+        }
+        else
+        {
+            operationId = Guid.NewGuid().ToString("n");
         }
 
-        var operationId = Guid.NewGuid().ToString("n");
-        context.Response.Headers[OperationIdHeader] = operationId;
+        context.Items[OperationIdItemKey] = operationId;
+
+        // La respuesta devuelve el identificador efectivo, para que el cliente pueda correlacionar
+        // su peticion con la operacion y con el log, incluso si el id lo puso el cliente.
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Headers[OperationIdHeader] = operationId;
+        }
+
         return operationId;
     }
 
     private static Task LogAsync(IServerLog log, HttpContext context, string eventName, LogSeverity severity, string message)
     {
         var clientId = GetClientId(context) ?? "anonymous";
-        var operationId = context.Response.Headers.TryGetValue(OperationIdHeader, out var op) && !string.IsNullOrWhiteSpace(op.FirstOrDefault())
-            ? op.First()!
-            : Guid.NewGuid().ToString("n");
+        var operationId = GetOrCreateOperationId(context);
         return log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, severity, eventName, message));
     }
 }
