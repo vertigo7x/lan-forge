@@ -176,7 +176,7 @@ dotnet build --configuration Release
 dotnet test --configuration Release
 ```
 
-La suite completa de esta rama contiene **226 pruebas**: 212 unitarias, 13 de integración
+La suite completa de esta rama contiene **244 pruebas**: 229 unitarias, 14 de integración
 y 1 E2E. Para ejecutar una capa concreta:
 
 ```bash
@@ -196,12 +196,19 @@ Pruebas de regresión asociadas a cada cambio:
 | A4 | `tests/Unit/Server/FileStorePathTests.cs` |
 | A1 | `tests/Integration/ChatHubTests.cs` |
 | A3 | `tests/Unit/Server/CatalogServiceTests.cs` |
-| A2 | `tests/Integration/DownloadCompletionTests.cs` |
-| M1 | `tests/Integration/OperationIdTests.cs` |
+| A2 | `tests/Integration/DownloadCompletionTests.cs` y `tests/Unit/Server/DownloadCompletionReporterTests.cs` |
+| M1 | `tests/Integration/OperationIdTests.cs` y `tests/Integration/DownloadCompletionTests.cs` |
 | M2 | `tests/Unit/Server/CatalogServiceTests.cs` y `CountingCatalogStore` |
 | M3 | `tests/Unit/Server/SqliteCatalogStoreTests.cs` y `CatalogServiceTests.cs` |
-| M4 | `tests/Unit/Server/AsyncPublishTests.cs` |
+| M4 | `tests/Unit/Server/AsyncPublishTests.cs` y `tests/Unit/Server/ServerUiTests.cs` |
 | U1 (M5 en la entrega) | `tests/Unit/Server/CatalogRowCacheTests.cs` |
+
+La cobertura de la parte visible de **M4** (el botón de publicar deshabilitado mientras
+dura la publicación) se comprueba en headless: `tests/Unit/Server/ServerUiTests.cs` monta
+el host real del servidor sobre un directorio temporal y abre la ventana del organizador
+en el hilo de UI de Avalonia. `tests/Unit/TestInfrastructure/HeadlessAvalonia.cs` comparte
+ese hilo con las pruebas de la UI del cliente, porque la aplicación Avalonia es un
+singleton por proceso.
 
 > La entrega incluye además la corrección de la confirmación de borrado (**U1**): las
 > filas `CatalogRow` se reutilizan entre refrescos mediante `CatalogRowCache`, por lo que
@@ -220,3 +227,5 @@ Pruebas de regresión asociadas a cada cambio:
 | `61b9984` | M3: operaciones con índice, límite y poda |
 | `7fd1199` | M4: publicar un paquete no congela la ventana del organizador |
 | `c4e0b32` | U1/M5: la confirmación de borrado sobrevive al refresco del listado |
+| `64fae5f` | Documentación de los cambios y su trazabilidad con la auditoría |
+| `97cfc84` | Cobertura de los huecos: poda de M3, `DownloadCompletionReporter`, UI del organizador en headless y `operationId` de la descarga |
