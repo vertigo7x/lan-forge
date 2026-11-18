@@ -13,7 +13,7 @@ namespace LanForge.Server.Application;
 /// la red contra la ruta real y los errores por campo que devuelve el servidor se
 /// mapean tal cual a los campos del formulario.
 ///
-/// Contrato del endpoint (ver <c>contrato-api-creacion-paquetes.md</c>):
+/// Contrato del endpoint (ver <c>docs/e2e-creacion-paquetes.md</c>):
 /// <list type="bullet">
 /// <item>201: <see cref="CreatePackageResponse"/> con el paquete creado.</item>
 /// <item>400: <see cref="ApiErrorResponse"/> con el detalle por campo.</item>

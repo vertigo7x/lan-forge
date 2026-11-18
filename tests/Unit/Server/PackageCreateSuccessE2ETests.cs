@@ -169,8 +169,12 @@ public sealed class PackageCreateSuccessE2ETests : IDisposable
         Assert.Equal("--fullscreen", body.Value.GetProperty("arguments").GetString());
 
         // ---- 5. El servidor publico el paquete de verdad ----
+        // Las llamadas son bloqueantes a proposito: el hilo del test tiene el
+        // SynchronizationContext de Avalonia headless y ahi las continuaciones no se
+        // ejecutan, asi que un await se quedaria colgado para siempre. Los helpers
+        // lanzan la peticion en un hilo del pool.
         var catalog = CatalogAsync().GetAwaiter().GetResult();
-        var entry = Assert.Single(catalog.Where(c => c.GameId == gameId));
+        var entry = Assert.Single(catalog, c => c.GameId == gameId);
         Assert.Equal("Neon Drift", entry.Title);
         Assert.Equal("1.2.3", entry.Version);
 
