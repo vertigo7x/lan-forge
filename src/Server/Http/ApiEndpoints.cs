@@ -16,6 +16,9 @@ public static class ApiEndpoints
     public const string ClientIdHeader = "X-LanForge-Client-Id";
     public const string OperationIdHeader = "X-LanForge-Operation-Id";
 
+    /// <summary>Clave en HttpContext.Items donde se cachea el identificador de operacion resuelto.</summary>
+    private const string OperationIdItemKey = "LanForge.OperationId";
+
     public static void MapLanForgeApi(this WebApplication app)
     {
         var api = app.MapGroup("/api/v1");
@@ -176,7 +179,7 @@ public static class ApiEndpoints
             }
         });
 
-        api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, ICatalogStore store, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);
             var clientId = GetClientId(context) ?? "anonymous";
@@ -195,20 +198,14 @@ public static class ApiEndpoints
             await catalog.RecordOperationAsync(new ServerOperation(
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
+            var reporter = new DownloadCompletionReporter(store, log);
             var completion = new NotifyStream(archive.Stream, () =>
-            {
-                _ = Task.Run(async () =>
-                {
-                    await catalog.RecordOperationAsync(new ServerOperation(
-                        operationId, clientId, "package.download", OperationStatus.Completed, started, DateTimeOffset.UtcNow, detail));
-                    await log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, LogSeverity.Info, "download.completed", detail));
-                });
-            });
+                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
 
             return Results.Stream(completion, contentType: "application/zip", fileDownloadName: $"{packageId}.zip", enableRangeProcessing: true);
         });
 
-        api.MapGet("/download/{packageId}/{**path}", async (string packageId, string path, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapGet("/download/{packageId}/{**path}", async (string packageId, string path, HttpContext context, CatalogService catalog, IServerLog log, ICatalogStore store, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);
             var clientId = GetClientId(context) ?? "anonymous";
@@ -226,35 +223,60 @@ public static class ApiEndpoints
             await catalog.RecordOperationAsync(new ServerOperation(
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
+            var reporter = new DownloadCompletionReporter(store, log);
             var completion = new NotifyStream(file.Stream, () =>
-            {
-                // Al cerrarse el stream (completado o cancelado) se finaliza la operación.
-                _ = Task.Run(async () =>
-                {
-                    await catalog.RecordOperationAsync(new ServerOperation(
-                        operationId, clientId, "package.download", OperationStatus.Completed, started, DateTimeOffset.UtcNow, detail));
-                    await log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, LogSeverity.Info, "download.completed", detail));
-                });
-            });
+                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
 
             return Results.Stream(completion, contentType: "application/octet-stream", fileDownloadName: Path.GetFileName(file.Entry.Path), enableRangeProcessing: true);
         });
     }
+
+    /// <summary>
+    /// Indica si el cliente corto la transferencia. Kestrel cancela el token de la peticion
+    /// cuando el cliente abandona la conexion, y el token ya esta cancelado cuando el stream
+    /// se cierra. Una descarga terminada a fondo (con su Range) no lo tiene cancelado.
+    /// </summary>
+    private static bool IsAborted(HttpContext context) =>
+        context.RequestAborted.IsCancellationRequested;
 
     private static string? GetClientId(HttpContext context) =>
         context.Request.Headers.TryGetValue(ClientIdHeader, out var values) && !string.IsNullOrWhiteSpace(values.FirstOrDefault())
             ? values.First()
             : null;
 
+    /// <summary>
+    /// Resuelve el identificador de operacion de la peticion. Se resuelve una sola vez por
+    /// peticion y se guarda en <see cref="HttpContext.Items"/>: la operacion registrada, la
+    /// linea de log y la cabecera de respuesta llevan SIEMPRE el mismo identificador, sea el
+    /// que propose el cliente o uno generado por el servidor.
+    /// </summary>
     private static string GetOrCreateOperationId(HttpContext context)
     {
-        // El id de operacion siempre se devuelve en la cabecera: asi el log y la
-        // operacion guardada comparten el mismo identificador de correlacion.
-        var operationId = context.Request.Headers.TryGetValue(OperationIdHeader, out var values) &&
-            !string.IsNullOrWhiteSpace(values.FirstOrDefault())
-            ? values.First()!
-            : Guid.NewGuid().ToString("n");
-        context.Response.Headers[OperationIdHeader] = operationId;
+        if (context.Items.TryGetValue(OperationIdItemKey, out var cached) && cached is string cachedId)
+        {
+            return cachedId;
+        }
+
+        string operationId;
+        if (context.Request.Headers.TryGetValue(OperationIdHeader, out var values) &&
+            !string.IsNullOrWhiteSpace(values.FirstOrDefault()))
+        {
+            operationId = values.First()!;
+        }
+        else
+        {
+            operationId = Guid.NewGuid().ToString("n");
+        }
+
+        context.Items[OperationIdItemKey] = operationId;
+
+        // La respuesta devuelve el identificador efectivo, para que el cliente pueda correlacionar
+        // su peticion con la operacion y con el log, incluso si el id lo puso el cliente.
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Headers[OperationIdHeader] = operationId;
+        }
+
         return operationId;
     }
 
@@ -290,9 +312,7 @@ public static class ApiEndpoints
     private static Task LogAsync(IServerLog log, HttpContext context, string eventName, LogSeverity severity, string message)
     {
         var clientId = GetClientId(context) ?? "anonymous";
-        var operationId = context.Response.Headers.TryGetValue(OperationIdHeader, out var op) && !string.IsNullOrWhiteSpace(op.FirstOrDefault())
-            ? op.First()!
-            : Guid.NewGuid().ToString("n");
+        var operationId = GetOrCreateOperationId(context);
         return log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, severity, eventName, message));
     }
 }

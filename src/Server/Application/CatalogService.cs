@@ -9,17 +9,32 @@ namespace LanForge.Server.Application;
 /// <summary>Casos de uso del catálogo: juegos, publicación de paquetes firmados y consultas de descarga.</summary>
 public sealed class CatalogService
 {
+    /// <summary>
+    /// Antiguedad maxima que se conserva en la tabla de operaciones. Cada sincronizacion
+    /// de catalogo y cada descarga inserta una fila, asi que sin esta poda la tabla
+    /// creceria durante toda la vida del servidor.
+    /// </summary>
+    public static readonly TimeSpan OperationRetention = TimeSpan.FromDays(7);
+
+    /// <summary>Cuantos archivos se hashean a la vez al publicar un paquete.</summary>
+    private const int MaxConcurrentHashes = 4;
+
     private readonly ICatalogStore _store;
     private readonly IPackageContentStore _content;
     private readonly IServerIdentity _identity;
     private readonly IServerLog? _log;
+    private readonly TimeProvider _timeProvider;
+    private DateTimeOffset _lastPruneUtc = DateTimeOffset.MinValue;
 
-    public CatalogService(ICatalogStore store, IPackageContentStore content, IServerIdentity identity, IServerLog? log = null)
+    public CatalogService(
+        ICatalogStore store, IPackageContentStore content, IServerIdentity identity,
+        IServerLog? log = null, TimeProvider? timeProvider = null)
     {
         _store = store;
         _content = content;
         _identity = identity;
         _log = log;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Game> AddOrUpdateGameAsync(
@@ -60,6 +75,11 @@ public sealed class CatalogService
         {
             throw new PackageVersionConflictException(gameId, packageVersion.Value);
         }
+
+        // La fila del juego puede existir aunque todavia no haya paquete (el organizador
+        // guarda la portada y la descripcion antes de publicar). Publicar no puede borrar
+        // esos datos: los hereda y solo fija el titulo.
+        var existingGame = await _store.GetGameAsync(gameId, cancellationToken);
 
         var files = await HashFilesAsync(source, cancellationToken);
         if (files.Count == 0)
@@ -102,9 +122,17 @@ public sealed class CatalogService
             Manifest = manifest,
         };
 
+        // El manifiesto firmado lleva el titulo, asi que la fila del catalogo debe llevar el
+        // mismo: si divergen, el cliente muestra un nombre y el manifiesto otro. Descripcion y
+        // portada se heredan de la fila existente: publicar no borra los datos del organizador
+        // (la edicion de metadatos sigue siendo de AddOrUpdateGameAsync).
+        var game = existingGame is null
+            ? new Game(gameId, title)
+            : existingGame with { Title = title };
+        await _store.UpsertGameAsync(game, cancellationToken);
+
         if (existing is null)
         {
-            await _store.UpsertGameAsync(new Game(gameId, title), cancellationToken);
             await _store.AddPackageAsync(package, cancellationToken);
         }
         else
@@ -126,13 +154,25 @@ public sealed class CatalogService
         return package?.Version;
     }
 
+    /// <summary>
+    /// Devuelve el catalogo para los clientes. Lee los juegos una sola vez y los empareja
+    /// en memoria: antes hacia una consulta a <c>games</c> por cada paquete (N+1), y este
+    /// es el endpoint que todos los clientes llaman en cada sincronizacion.
+    /// </summary>
     public async Task<IReadOnlyList<CatalogEntry>> ListCatalogAsync(CancellationToken cancellationToken = default)
     {
         var packages = await _store.ListLatestPackagesAsync(cancellationToken);
+        var games = await _store.ListGamesAsync(cancellationToken);
+        var gamesById = new Dictionary<string, Game>(games.Count, StringComparer.Ordinal);
+        foreach (var game in games)
+        {
+            gamesById[game.Id] = game;
+        }
+
         var entries = new List<CatalogEntry>(packages.Count);
         foreach (var package in packages)
         {
-            var game = await _store.GetGameAsync(package.GameId, cancellationToken);
+            gamesById.TryGetValue(package.GameId, out var game);
             entries.Add(new CatalogEntry(
                 package.GameId,
                 game?.Title ?? package.GameId,
@@ -250,10 +290,35 @@ public sealed class CatalogService
         return stream is null ? null : new PackageFileStream(stream, entry);
     }
 
-    /// <summary>Registra una operación en el store (vista "operaciones" de la UI).</summary>
+    /// <summary>
+    /// Registra una operación en el store (vista "operaciones" de la UI). De paso poda
+    /// las operaciones mas antiguas que la ventana de retencion, pero no en cada
+    /// registro: como mucho una vez por minuto, para no pagar un DELETE por descarga.
+    /// </summary>
     public async Task RecordOperationAsync(ServerOperation operation, CancellationToken cancellationToken = default)
     {
         await _store.RecordOperationAsync(operation, cancellationToken);
+        await PruneOperationsIfDueAsync(cancellationToken);
+    }
+
+    /// <summary>Poda las operaciones que han superado la ventana de retencion, si toca poda.</summary>
+    private async Task PruneOperationsIfDueAsync(CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        if (now - _lastPruneUtc < TimeSpan.FromMinutes(1))
+        {
+            return;
+        }
+
+        _lastPruneUtc = now;
+        var pruned = await _store.PruneOperationsAsync(now - OperationRetention, cancellationToken);
+        if (pruned > 0)
+        {
+            await WriteLogAsync(
+                null, "operations.pruned", LogSeverity.Debug,
+                $"Poda de operaciones: {pruned} fila(s) mas antiguas de {OperationRetention.TotalDays:0} dia(s)",
+                cancellationToken);
+        }
     }
 
     private async Task WriteLogAsync(
@@ -270,18 +335,39 @@ public sealed class CatalogService
             cancellationToken);
     }
 
-    private static async Task<IReadOnlyList<ManifestFileEntry>> HashFilesAsync(DirectoryInfo source, CancellationToken cancellationToken)
+    /// <summary>
+    /// Hashea los archivos del directorio fuente. El hashing es una operacion larga y
+    /// bloqueante (con varios GB puede tardar minutos), asi que se ejecuta fuera del hilo
+    /// que llama: el organizador publica desde el hilo de UI y, sin esto, la ventana se
+    /// quedaba congelada. Los archivos se hashean en paralelo, con un tope para no agotar
+    /// la memoria ni el disco con un juego enorme.
+    /// </summary>
+    private static async Task<IReadOnlyList<ManifestFileEntry>> HashFilesAsync(
+        DirectoryInfo source, CancellationToken cancellationToken)
     {
-        var files = new List<ManifestFileEntry>();
-        foreach (var file in source.EnumerateFiles("*", SearchOption.AllDirectories))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var relativePath = Path.GetRelativePath(source.FullName, file.FullName).Replace('\\', '/');
-            await using var stream = file.OpenRead();
-            var hash = await Sha256Hash.ComputeHexAsync(stream, cancellationToken);
-            files.Add(ManifestFileEntry.Create(relativePath, hash, file.Length));
-        }
+        var files = source.EnumerateFiles("*", SearchOption.AllDirectories);
+        var entries = new List<ManifestFileEntry>();
+        using var throttle = new SemaphoreSlim(MaxConcurrentHashes);
 
-        return files;
+        var tasks = files.Select(async file =>
+        {
+            await throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var relativePath = Path.GetRelativePath(source.FullName, file.FullName).Replace('\\', '/');
+                await using var stream = file.OpenRead();
+                var hash = await Sha256Hash.ComputeHexAsync(stream, cancellationToken).ConfigureAwait(false);
+                return ManifestFileEntry.Create(relativePath, hash, file.Length);
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        }).ToList();
+
+        var hashed = await Task.WhenAll(tasks).ConfigureAwait(false);
+        entries.AddRange(hashed);
+        return entries;
     }
 }

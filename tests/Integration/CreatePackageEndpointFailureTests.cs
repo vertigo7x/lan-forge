@@ -109,7 +109,12 @@ public sealed class CreatePackageEndpointFailureTests : IDisposable
         public Task<bool> DeleteGameAsync(string gameId, CancellationToken cancellationToken = default) =>
             Task.FromResult(false);
 
-        public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(CancellationToken cancellationToken = default) =>
+        public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(
+            int limit = ICatalogStore.DefaultOperationsLimit, CancellationToken cancellationToken = default) =>
             Task.FromResult<IReadOnlyList<ServerOperation>>([]);
+
+        public Task<int> PruneOperationsAsync(
+            DateTimeOffset olderThan, CancellationToken cancellationToken = default) =>
+            Task.FromResult(0);
     }
 }

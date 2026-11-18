@@ -76,6 +76,23 @@ public sealed class InMemoryCatalogStore : ICatalogStore
         return Task.FromResult(packageIds.Count > 0 || removedGame);
     }
 
-    public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(CancellationToken cancellationToken = default) =>
-        Task.FromResult<IReadOnlyList<ServerOperation>>(_operations.ToArray());
+    public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(
+        int limit = ICatalogStore.DefaultOperationsLimit, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<ServerOperation>>(
+            _operations
+                .OrderByDescending(o => o.StartedUtc)
+                .Take(Math.Max(0, limit))
+                .ToArray());
+
+    public Task<int> PruneOperationsAsync(
+        DateTimeOffset olderThan, CancellationToken cancellationToken = default)
+    {
+        var stale = _operations.Where(o => o.StartedUtc < olderThan).ToList();
+        foreach (var operation in stale)
+        {
+            _operations.Remove(operation);
+        }
+
+        return Task.FromResult(stale.Count);
+    }
 }
