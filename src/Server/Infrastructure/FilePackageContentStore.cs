@@ -24,6 +24,12 @@ public sealed class FilePackageContentStore : IPackageContentStore
         Directory.CreateDirectory(_root);
     }
 
+    /// <summary>
+    /// Comprime el directorio fuente en el .zip del paquete. La compresion es una operacion
+    /// larga y bloqueante (con varios GB puede tardar minutos), asi que se ejecuta fuera
+    /// del hilo que llama: el organizador la invoca desde el hilo de UI y, sin esto, la
+    /// ventana se quedaba congelada sin progreso ni cancelacion.
+    /// </summary>
     public Task ImportArchiveAsync(string packageId, string sourceDirectory, CancellationToken cancellationToken = default)
     {
         if (!TryGetArchivePath(packageId, out var target))
@@ -31,15 +37,50 @@ public sealed class FilePackageContentStore : IPackageContentStore
             throw new ArgumentException($"Identificador de paquete invalido: '{packageId}'.", nameof(packageId));
         }
 
+        return Task.Run(() => ImportArchive(target, sourceDirectory, cancellationToken), cancellationToken);
+    }
+
+    private static void ImportArchive(string target, string sourceDirectory, CancellationToken cancellationToken)
+    {
         var temp = target + ".tmp";
         if (File.Exists(temp))
         {
             File.Delete(temp);
         }
 
-        ZipFile.CreateFromDirectory(sourceDirectory, temp, CompressionLevel.SmallestSize, includeBaseDirectory: false);
+        try
+        {
+            ZipFile.CreateFromDirectory(sourceDirectory, temp, CompressionLevel.SmallestSize, includeBaseDirectory: false);
+        }
+        catch
+        {
+            // Si la compresion falla (o se cancela), no queda un .tmp a medias que
+            // ensucie la raiz de contenido.
+            TryDelete(temp);
+            throw;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
         File.Move(temp, target, overwrite: true);
-        return Task.CompletedTask;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // Mejor esfuerzo: el .tmp sobrante no impide volver a publicar.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Mejor esfuerzo: el .tmp sobrante no impide volver a publicar.
+        }
     }
 
     public Task<Stream?> OpenArchiveAsync(string packageId, CancellationToken cancellationToken = default)

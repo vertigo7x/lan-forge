@@ -77,18 +77,31 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Publica un paquete. La compresion y el hashing son operaciones largas: el boton se
+    /// deshabilita y se muestra el estado mientras tanto, para que la ventana no parezca
+    /// congelada y el organizador no lance dos publicaciones a la vez.
+    /// </summary>
     private async Task PublishAsync()
     {
         var services = App.WebServices!;
         var catalog = services.GetRequiredService<CatalogService>();
+        var gameId = GameIdBox.Text?.Trim() ?? string.Empty;
+        var title = string.IsNullOrWhiteSpace(TitleBox.Text) ? gameId : TitleBox.Text.Trim();
+        var version = VersionBox.Text?.Trim() ?? string.Empty;
+        var sourceDirectory = SourceDirBox.Text ?? string.Empty;
+        var entryPoint = EntryPointBox.Text?.Trim() ?? string.Empty;
+
+        SetPublishing(true);
+        StatusText.Text = $"Publicando '{gameId}' v{version}... (comprimiendo y hasheando, esto puede tardar)";
         try
         {
             var entry = await catalog.PublishPackageAsync(
-                GameIdBox.Text?.Trim() ?? string.Empty,
-                string.IsNullOrWhiteSpace(TitleBox.Text) ? GameIdBox.Text?.Trim() ?? "Juego" : TitleBox.Text.Trim(),
-                VersionBox.Text?.Trim() ?? string.Empty,
-                SourceDirBox.Text ?? string.Empty,
-                EntryPointBox.Text?.Trim() ?? string.Empty);
+                gameId,
+                title,
+                version,
+                sourceDirectory,
+                entryPoint);
             if (!string.IsNullOrWhiteSpace(CoverBox.Text))
             {
                 await catalog.SetCoverAsync(
@@ -104,6 +117,18 @@ public partial class MainWindow : Window
         {
             StatusText.Text = $"Error al publicar: {ex.Message}";
         }
+        finally
+        {
+            SetPublishing(false);
+        }
+    }
+
+    /// <summary>Deshabilita el boton de publicar mientras hay una publicacion en curso.</summary>
+    private void SetPublishing(bool publishing)
+    {
+        PublishButton.IsEnabled = !publishing;
+        BrowseButton.IsEnabled = !publishing;
+        BrowseCoverButton.IsEnabled = !publishing;
     }
 
     /// <summary>Borra un paquete del catalogo. La primera pulsacion pide confirmacion.</summary>

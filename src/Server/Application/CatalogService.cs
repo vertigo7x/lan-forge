@@ -16,6 +16,9 @@ public sealed class CatalogService
     /// </summary>
     public static readonly TimeSpan OperationRetention = TimeSpan.FromDays(7);
 
+    /// <summary>Cuantos archivos se hashean a la vez al publicar un paquete.</summary>
+    private const int MaxConcurrentHashes = 4;
+
     private readonly ICatalogStore _store;
     private readonly IPackageContentStore _content;
     private readonly IServerIdentity _identity;
@@ -314,18 +317,39 @@ public sealed class CatalogService
             cancellationToken);
     }
 
-    private static async Task<IReadOnlyList<ManifestFileEntry>> HashFilesAsync(DirectoryInfo source, CancellationToken cancellationToken)
+    /// <summary>
+    /// Hashea los archivos del directorio fuente. El hashing es una operacion larga y
+    /// bloqueante (con varios GB puede tardar minutos), asi que se ejecuta fuera del hilo
+    /// que llama: el organizador publica desde el hilo de UI y, sin esto, la ventana se
+    /// quedaba congelada. Los archivos se hashean en paralelo, con un tope para no agotar
+    /// la memoria ni el disco con un juego enorme.
+    /// </summary>
+    private static async Task<IReadOnlyList<ManifestFileEntry>> HashFilesAsync(
+        DirectoryInfo source, CancellationToken cancellationToken)
     {
-        var files = new List<ManifestFileEntry>();
-        foreach (var file in source.EnumerateFiles("*", SearchOption.AllDirectories))
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var relativePath = Path.GetRelativePath(source.FullName, file.FullName).Replace('\\', '/');
-            await using var stream = file.OpenRead();
-            var hash = await Sha256Hash.ComputeHexAsync(stream, cancellationToken);
-            files.Add(ManifestFileEntry.Create(relativePath, hash, file.Length));
-        }
+        var files = source.EnumerateFiles("*", SearchOption.AllDirectories);
+        var entries = new List<ManifestFileEntry>();
+        using var throttle = new SemaphoreSlim(MaxConcurrentHashes);
 
-        return files;
+        var tasks = files.Select(async file =>
+        {
+            await throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var relativePath = Path.GetRelativePath(source.FullName, file.FullName).Replace('\\', '/');
+                await using var stream = file.OpenRead();
+                var hash = await Sha256Hash.ComputeHexAsync(stream, cancellationToken).ConfigureAwait(false);
+                return ManifestFileEntry.Create(relativePath, hash, file.Length);
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        }).ToList();
+
+        var hashed = await Task.WhenAll(tasks).ConfigureAwait(false);
+        entries.AddRange(hashed);
+        return entries;
     }
 }
