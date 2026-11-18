@@ -88,7 +88,7 @@ public static class ApiEndpoints
             }
         });
 
-        api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, ICatalogStore store, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);
             var clientId = GetClientId(context) ?? "anonymous";
@@ -107,20 +107,14 @@ public static class ApiEndpoints
             await catalog.RecordOperationAsync(new ServerOperation(
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
+            var reporter = new DownloadCompletionReporter(store, log);
             var completion = new NotifyStream(archive.Stream, () =>
-            {
-                _ = Task.Run(async () =>
-                {
-                    await catalog.RecordOperationAsync(new ServerOperation(
-                        operationId, clientId, "package.download", OperationStatus.Completed, started, DateTimeOffset.UtcNow, detail));
-                    await log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, LogSeverity.Info, "download.completed", detail));
-                });
-            });
+                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
 
             return Results.Stream(completion, contentType: "application/zip", fileDownloadName: $"{packageId}.zip", enableRangeProcessing: true);
         });
 
-        api.MapGet("/download/{packageId}/{**path}", async (string packageId, string path, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapGet("/download/{packageId}/{**path}", async (string packageId, string path, HttpContext context, CatalogService catalog, IServerLog log, ICatalogStore store, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);
             var clientId = GetClientId(context) ?? "anonymous";
@@ -138,20 +132,21 @@ public static class ApiEndpoints
             await catalog.RecordOperationAsync(new ServerOperation(
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
+            var reporter = new DownloadCompletionReporter(store, log);
             var completion = new NotifyStream(file.Stream, () =>
-            {
-                // Al cerrarse el stream (completado o cancelado) se finaliza la operación.
-                _ = Task.Run(async () =>
-                {
-                    await catalog.RecordOperationAsync(new ServerOperation(
-                        operationId, clientId, "package.download", OperationStatus.Completed, started, DateTimeOffset.UtcNow, detail));
-                    await log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, LogSeverity.Info, "download.completed", detail));
-                });
-            });
+                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
 
             return Results.Stream(completion, contentType: "application/octet-stream", fileDownloadName: Path.GetFileName(file.Entry.Path), enableRangeProcessing: true);
         });
     }
+
+    /// <summary>
+    /// Indica si el cliente corto la transferencia. Kestrel cancela el token de la peticion
+    /// cuando el cliente abandona la conexion, y el token ya esta cancelado cuando el stream
+    /// se cierra. Una descarga terminada a fondo (con su Range) no lo tiene cancelado.
+    /// </summary>
+    private static bool IsAborted(HttpContext context) =>
+        context.RequestAborted.IsCancellationRequested;
 
     private static string? GetClientId(HttpContext context) =>
         context.Request.Headers.TryGetValue(ClientIdHeader, out var values) && !string.IsNullOrWhiteSpace(values.FirstOrDefault())
