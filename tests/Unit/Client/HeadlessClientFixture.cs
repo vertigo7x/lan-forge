@@ -13,6 +13,7 @@ public sealed class HeadlessClientFixture : IDisposable
 {
     private static readonly object Gate = new();
     private static bool _started;
+    private static Avalonia.Application? CurrentApp;
 
     public HeadlessClientFixture()
     {
@@ -29,9 +30,25 @@ public sealed class HeadlessClientFixture : IDisposable
             Directory.CreateDirectory(dataRoot);
             Environment.SetEnvironmentVariable(ClientOptions.DataDirectoryVariable, dataRoot);
 
-            AppBuilder.Configure<LanForge.Client.App>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
-                .SetupWithoutStarting();
+            try
+            {
+                AppBuilder.Configure<LanForge.Client.App>()
+                    .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                    .SetupWithoutStarting();
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Setup was already called", StringComparison.Ordinal))
+            {
+                // Otra colección de tests (p.ej. la UI del servidor) ya inicializó
+                // Avalonia en este proceso. En ese caso se cambia la aplicación
+                // activa para que los recursos del cliente (fuentes y tema) sigan
+                // disponibles: Setup ya no se puede llamar, pero se puede
+                // reinicializar la instancia actual de la aplicación.
+                CurrentApp = Avalonia.Application.Current;
+                if (CurrentApp is not null)
+                {
+                    CurrentApp.Initialize();
+                }
+            }
             _started = true;
         }
     }

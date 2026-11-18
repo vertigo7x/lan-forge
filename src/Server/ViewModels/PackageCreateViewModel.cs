@@ -28,6 +28,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private string? _argumentsError;
 
     private bool _isSubmitting;
+    private bool _canSubmit = true;
     private string? _statusMessage;
     private bool _statusIsError;
 
@@ -159,6 +160,16 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
     public DelegateCommand ResetCommand { get; }
 
+    /// <summary>
+    /// Indica si se puede enviar el formulario. Se mantiene sincronizado con
+    /// <see cref="IsSubmitting"/> para que el botón se deshabilite durante el envío.
+    /// </summary>
+    public bool CanSubmit
+    {
+        get => _canSubmit;
+        private set => SetField(ref _canSubmit, value, nameof(CanSubmit));
+    }
+
     // ---------- Acciones ----------
 
     /// <summary>
@@ -184,6 +195,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         }
 
         IsSubmitting = true;
+        CanSubmit = false;
         try
         {
             var result = await _service.CreateAsync(request);
@@ -210,6 +222,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         finally
         {
             IsSubmitting = false;
+            CanSubmit = true;
         }
     }
 
