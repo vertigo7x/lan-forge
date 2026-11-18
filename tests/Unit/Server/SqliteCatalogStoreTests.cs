@@ -1,3 +1,4 @@
+using LanForge.Server.Application;
 using LanForge.Server.Domain;
 using LanForge.Server.Infrastructure;
 using LanForge.Shared.Manifest;
@@ -203,6 +204,60 @@ public sealed class SqliteCatalogStoreTests : IDisposable
 
         Assert.Equal(0, await store.PruneOperationsAsync(baseTime.AddHours(-1)));
         Assert.Single(await store.ListOperationsAsync());
+    }
+
+    [Fact]
+    public async Task ListOperations_SinLimiteExplicito_DevuelveLasMasRecientesAcotadas()
+    {
+        // La UI lee las operaciones con el limite por defecto: si la lectura no estuviera
+        // acotada, traeria la tabla entera cada 2 segundos solo para quedarse con 100.
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+        var total = ICatalogStore.DefaultOperationsLimit + 50;
+
+        for (var i = 0; i < total; i++)
+        {
+            await store.RecordOperationAsync(new ServerOperation(
+                $"op-{i:D3}", "client-1", "catalog.sync",
+                OperationStatus.Completed, baseTime.AddSeconds(i), baseTime.AddSeconds(i), null));
+        }
+
+        var operations = await store.ListOperationsAsync();
+
+        Assert.Equal(ICatalogStore.DefaultOperationsLimit, operations.Count);
+        // De la mas reciente a la mas antigua: la ultima insertada va la primera.
+        Assert.Equal($"op-{total - 1:D3}", operations[0].OperationId);
+    }
+
+    [Fact]
+    public async Task ListOperations_ConLimiteCero_DevuelveLaListaVacia()
+    {
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+        await store.RecordOperationAsync(new ServerOperation(
+            "op-1", "client-1", "catalog.sync",
+            OperationStatus.Completed, baseTime, baseTime, null));
+
+        Assert.Empty(await store.ListOperationsAsync(0));
+    }
+
+    [Fact]
+    public async Task PruneOperations_BorraSoloLoQueEstaAntesDelLimite()
+    {
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+        await store.RecordOperationAsync(new ServerOperation(
+            "muy-vieja", "client-1", "catalog.sync", OperationStatus.Completed, baseTime.AddDays(-30), baseTime.AddDays(-30), null));
+        await store.RecordOperationAsync(new ServerOperation(
+            "vieja", "client-1", "catalog.sync", OperationStatus.Completed, baseTime.AddDays(-10), baseTime.AddDays(-10), null));
+        await store.RecordOperationAsync(new ServerOperation(
+            "dentro", "client-1", "catalog.sync", OperationStatus.Completed, baseTime.AddDays(-1), baseTime.AddDays(-1), null));
+
+        var pruned = await store.PruneOperationsAsync(baseTime.AddDays(-7));
+
+        Assert.Equal(2, pruned);
+        var remaining = Assert.Single(await store.ListOperationsAsync());
+        Assert.Equal("dentro", remaining.OperationId);
     }
 
     [Fact]

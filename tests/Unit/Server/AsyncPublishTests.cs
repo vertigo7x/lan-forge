@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using LanForge.Server.Application;
 using LanForge.Server.Infrastructure;
+using LanForge.Shared.Manifest;
 using LanForge.UnitTests.Server.Fakes;
 
 namespace LanForge.UnitTests.Server;
@@ -71,6 +72,42 @@ public sealed class AsyncPublishTests : IDisposable
         using var zip = System.IO.Compression.ZipFile.OpenRead(archive);
         Assert.Single(zip.Entries);
         Assert.Equal("run.exe", zip.Entries[0].FullName);
+    }
+
+    [Fact]
+    public async Task Publish_HasheaTodosLosArchivos_EnParalelo()
+    {
+        // El hashing es la parte lenta de publicar. Con muchos archivos se hace en
+        // paralelo (con un tope de concurrencia), pero el manifiesto tiene que
+        // llevar TODOS los archivos con su hash: si el paralelismo se comiera alguno,
+        // el cliente no podria verificarlo y la instalacion fallaria.
+        var store = new InMemoryCatalogStore();
+        var contentStore = new FilePackageContentStore(Path.Combine(_temp.Path, "packages"));
+        var identity = new FileServerIdentityStore(Path.Combine(_temp.Path, "identity"));
+        var service = new CatalogService(store, contentStore, identity);
+        var files = new List<(string RelativePath, string Content)>();
+        for (var i = 0; i < 24; i++)
+        {
+            files.Add(($"data/file{i:D2}.dat", $"contenido-{i}"));
+        }
+
+        var source = _temp.CreateSourceDirectory(files.ToArray());
+
+        await service.PublishPackageAsync("game", "Game", "1.0", source, "data/file00.dat");
+
+        var manifest = await service.GetManifestAsync("game");
+        Assert.NotNull(manifest);
+        Assert.Equal(24, manifest!.Files.Count);
+
+        // Cada archivo del manifiesto tiene el tamano de su contenido.
+        foreach (var (relativePath, fileContent) in files)
+        {
+            var entry = Assert.Single(manifest.Files, f => f.Path == relativePath);
+            Assert.Equal((long)fileContent.Length, entry.Size);
+        }
+
+        // Y el manifiesto firmado sigue siendo valido.
+        Assert.True(ManifestVerifier.Verify(manifest));
     }
 
     [Fact]

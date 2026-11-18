@@ -297,6 +297,66 @@ public sealed class CatalogServiceTests : IDisposable
         Assert.Equal(2, (await store.ListOperationsAsync()).Count);
     }
 
+    [Fact]
+    public async Task RecordOperation_PodaContraElStoreReal_NoSoloContraElFake()
+    {
+        // La poda por antiguedad se ejecuta contra el store de produccion (SQLite), no
+        // solo contra el fake en memoria: si el DELETE no llegara al store, la tabla de
+        // operaciones seguiria creciendo durante toda la vida del servidor.
+        using var store = new SqliteCatalogStore(Path.Combine(_temp.Path, "prune.db"));
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero));
+        var service = CreateService(store, timeProvider: clock);
+
+        await service.RecordOperationAsync(NewOperation("vieja", clock.GetUtcNow().AddDays(-30)));
+        await service.RecordOperationAsync(NewOperation("reciente", clock.GetUtcNow().AddDays(-1)));
+
+        var remaining = await store.ListOperationsAsync();
+        var loaded = Assert.Single(remaining);
+        Assert.Equal("reciente", loaded.OperationId);
+    }
+
+    [Fact]
+    public async Task RecordOperation_NoPodaDentroDeLaVentanaDeUnMinuto()
+    {
+        // Podar en cada registro significaria un DELETE por cada descarga. El servicio
+        // poda como mucho una vez por minuto: dentro de esa ventana, una operacion que
+        // caduque se queda hasta la siguiente poda.
+        var store = new InMemoryCatalogStore();
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero));
+        var service = CreateService(store, timeProvider: clock);
+
+        // La primera llamada poda (el reloj aun no haAdvancesado) y fija la ventana.
+        await service.RecordOperationAsync(NewOperation("primera", clock.GetUtcNow()));
+        clock.Advance(TimeSpan.FromSeconds(30));
+
+        // Esta operacion caduca dentro de la ventana: no debe podarse todavia.
+        await service.RecordOperationAsync(NewOperation("caducada", clock.GetUtcNow().AddDays(-30)));
+        Assert.Equal(2, (await store.ListOperationsAsync()).Count);
+
+        // Pasado el minuto, la siguiente llamada poda.
+        clock.Advance(TimeSpan.FromSeconds(31));
+        await service.RecordOperationAsync(NewOperation("disparadora", clock.GetUtcNow()));
+
+        var remaining = await store.ListOperationsAsync();
+        Assert.DoesNotContain(remaining, o => o.OperationId == "caducada");
+        Assert.Equal(2, remaining.Count);
+    }
+
+    [Fact]
+    public async Task RecordOperation_PodaDeNuevoPasadoElMinuto()
+    {
+        var store = new InMemoryCatalogStore();
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero));
+        var service = CreateService(store, timeProvider: clock);
+
+        await service.RecordOperationAsync(NewOperation("a", clock.GetUtcNow()));
+        clock.Advance(TimeSpan.FromMinutes(2));
+        await service.RecordOperationAsync(NewOperation("b", clock.GetUtcNow().AddDays(-30)));
+
+        var remaining = await store.ListOperationsAsync();
+        Assert.DoesNotContain(remaining, o => o.OperationId == "b");
+    }
+
     private static ServerOperation NewOperation(string id, DateTimeOffset startedUtc) => new(
         id, "client-1", "catalog.sync", OperationStatus.Completed, startedUtc, startedUtc, null);
 
