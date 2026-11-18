@@ -11,6 +11,9 @@ test-results/
 blob-report/
 playwright/.cache/
 
+# Resultados de pruebas .NET
+TestResults/
+
 # Visual Studio / Rider
 .vs/
 .idea/
