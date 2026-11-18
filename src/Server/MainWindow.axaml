@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:vm="using:LanForge.Server.ViewModels"
+        xmlns:views="using:LanForge.Server.Views"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="860" d:DesignHeight="560"
         x:Class="LanForge.Server.MainWindow"
@@ -54,6 +55,9 @@
               <Button x:Name="BrowseCoverButton" Content="Elegir imagen…"/>
             </StackPanel>
           </StackPanel>
+        </TabItem>
+        <TabItem Header="Publicar">
+          <views:PackageCreateView />
         </TabItem>
         <TabItem Header="Clientes">
           <ListBox x:Name="ClientsList" Height="280"/>

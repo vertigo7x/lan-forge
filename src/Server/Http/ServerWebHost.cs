@@ -37,6 +37,12 @@ public static class ServerWebHost
         builder.Services.AddSingleton<CatalogService>();
         builder.Services.AddSingleton<CreatePackageUseCase>();
 
+        // Capa de servicio del formulario de creacion de paquetes. Ahora mismo se
+        // resuelve con la simulacion (no toca la red); cuando exista el cliente
+        // HTTP real, basta cambiar esta linea por la implementacion real: los
+        // consumidores dependen de IPackageCreationService, no de esta clase.
+        builder.Services.AddSingleton<IPackageCreationService, MockPackageCreationService>();
+
         var app = builder.Build();
         app.MapHub<ChatHub>(ChatHub.Path);
         app.MapLanForgeApi();

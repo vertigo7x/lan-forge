@@ -17,10 +17,16 @@ namespace LanForge.UnitTests.Client;
 /// la portada se pinta (7.1), el area de chat es responsive y el boton de enviar
 /// queda dentro (7.3), el nombre de usuario se puede escribir (7.4) y los botones
 /// de ajustes tienen padding (7.5).
+///
+/// Las ventanas se construyen dentro de <see cref="HeadlessAvalonia.RunOnUiThreadAndWait"/>:
+/// en el arranque compartido el hilo de UI lo crea la sesion headless, y un
+/// <see cref="Window"/> construido en otro hilo revienta con "The calling thread
+/// cannot access this object because a different thread owns it".
 /// </summary>
 [Collection("Cliente-UI")]
 public sealed class ClientUiTests
 {
+    // Debe llamarse dentro del hilo de UI (RunOnUiThreadAndWait).
     private static MainWindow CreateWindow()
     {
         var window = new MainWindow();
@@ -37,24 +43,27 @@ public sealed class ClientUiTests
     [Fact]
     public void La_portada_de_la_game_card_se_convierte_en_una_imagen()
     {
-        var card = new GameCard();
-        var window = new Window { Width = 400, Height = 300, Content = card };
-        window.Show();
-
-        card.DataContext = new GameCardItem(
-            new Shared.Models.CatalogEntry("neon-drift", "Neon Drift", "neon-drift", "1.0.0", 1024, 12),
-            installedVersion: null,
-            install: _ => Task.CompletedTask,
-            play: _ => Task.CompletedTask)
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            CoverAsset = "avares://LanForge.Client/Assets/cover-neon-drift.png",
-        };
-        window.UpdateLayout();
+            var card = new GameCard();
+            var window = new Window { Width = 400, Height = 300, Content = card };
+            window.Show();
 
-        var image = card.GetVisualDescendants().OfType<Image>().FirstOrDefault();
-        Assert.NotNull(image);
-        // Image.Source es IImage: si se enlaza un string, la imagen no se pinta.
-        Assert.IsAssignableFrom<IImage>(image!.Source);
+            card.DataContext = new GameCardItem(
+                new Shared.Models.CatalogEntry("neon-drift", "Neon Drift", "neon-drift", "1.0.0", 1024, 12),
+                installedVersion: null,
+                install: _ => Task.CompletedTask,
+                play: _ => Task.CompletedTask)
+            {
+                CoverAsset = "avares://LanForge.Client/Assets/cover-neon-drift.png",
+            };
+            window.UpdateLayout();
+
+            var image = card.GetVisualDescendants().OfType<Image>().FirstOrDefault();
+            Assert.NotNull(image);
+            // Image.Source es IImage: si se enlaza un string, la imagen no se pinta.
+            Assert.IsAssignableFrom<IImage>(image!.Source);
+        });
     }
 
     [Fact]
@@ -84,29 +93,32 @@ public sealed class ClientUiTests
     [Fact]
     public void El_boton_de_enviar_queda_dentro_del_area_de_chat()
     {
-        var window = CreateWindow();
-        try
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            window.FindControl<ScrollViewer>("ChatView")!.IsVisible = true;
-            window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
-            window.UpdateLayout();
+            var window = CreateWindow();
+            try
+            {
+                window.FindControl<ScrollViewer>("ChatView")!.IsVisible = true;
+                window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
+                window.UpdateLayout();
 
-            var input = window.FindControl<TextBox>("ChatInput")!;
-            var send = window.FindControl<Button>("SendButton")!;
-            var card = input.GetVisualAncestors().OfType<Border>().First(b => b.Padding.Left > 0);
+                var input = window.FindControl<TextBox>("ChatInput")!;
+                var send = window.FindControl<Button>("SendButton")!;
+                var card = input.GetVisualAncestors().OfType<Border>().First(b => b.Padding.Left > 0);
 
-            var sendRight = send.Bounds.X + send.Bounds.Width;
-            Assert.True(
-                sendRight <= card.Bounds.Width,
-                $"El boton de enviar se sale del area de chat (derecha {sendRight} > {card.Bounds.Width}).");
+                var sendRight = send.Bounds.X + send.Bounds.Width;
+                Assert.True(
+                    sendRight <= card.Bounds.Width,
+                    $"El boton de enviar se sale del area de chat (derecha {sendRight} > {card.Bounds.Width}).");
 
-            // El campo de entrada comparte la fila (columna "*") con el boton.
-            Assert.Same(input.GetVisualParent(), send.GetVisualParent());
-        }
-        finally
-        {
-            window.Close();
-        }
+                // El campo de entrada comparte la fila (columna "*") con el boton.
+                Assert.Same(input.GetVisualParent(), send.GetVisualParent());
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
     [Fact]
@@ -114,14 +126,20 @@ public sealed class ClientUiTests
     {
         // En headless la ventana ya mostrada no se vuelve a medir al cambiar Width,
         // asi que se mide con una ventana nueva por cada ancho.
-        var narrow = MeasureChatCardWidth(1280);
-        var wide = MeasureChatCardWidth(1800);
+        var narrow = 0.0;
+        var wide = 0.0;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            narrow = MeasureChatCardWidth(1280);
+            wide = MeasureChatCardWidth(1800);
+        });
 
         Assert.True(
             wide > narrow,
             $"El area de chat no se adapta al ancho de la ventana ({wide} <= {narrow}).");
     }
 
+    // Debe llamarse dentro del hilo de UI (RunOnUiThreadAndWait).
     private static double MeasureChatCardWidth(double width)
     {
         var window = new MainWindow();
@@ -149,36 +167,39 @@ public sealed class ClientUiTests
     [Fact]
     public void El_nombre_de_usuario_se_puede_escribir_y_tiene_placeholder()
     {
-        var window = CreateWindow();
-        try
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            // El campo vive en la vista de ajustes, que arranca oculta: sin mostrarla
-            // el control no puede recibir foco ni tecleado.
-            window.FindControl<ScrollViewer>("SettingsView")!.IsVisible = true;
-            window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
-            window.UpdateLayout();
-            HeadlessClientFixture.DrainUiQueue();
+            var window = CreateWindow();
+            try
+            {
+                // El campo vive en la vista de ajustes, que arranca oculta: sin mostrarla
+                // el control no puede recibir foco ni tecleado.
+                window.FindControl<ScrollViewer>("SettingsView")!.IsVisible = true;
+                window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
+                window.UpdateLayout();
+                HeadlessClientFixture.DrainUiQueue();
 
-            var nameBox = window.FindControl<TextBox>("PlayerNameBox")!;
+                var nameBox = window.FindControl<TextBox>("PlayerNameBox")!;
 
-            Assert.Equal("Escribe tu nombre de jugador", nameBox.PlaceholderText);
-            Assert.False(nameBox.IsReadOnly);
+                Assert.Equal("Escribe tu nombre de jugador", nameBox.PlaceholderText);
+                Assert.False(nameBox.IsReadOnly);
 
-            // Al abrir, el campo viene relleno con el nombre de la maquina: se vacia
-            // para comprobar que el texto tecleado llega al control.
-            nameBox.Text = string.Empty;
-            window.Activate();
-            nameBox.Focus();
-            HeadlessClientFixture.DrainUiQueue();
-            window.KeyTextInput("Ana");
-            window.UpdateLayout();
+                // Al abrir, el campo viene relleno con el nombre de la maquina: se vacia
+                // para comprobar que el texto tecleado llega al control.
+                nameBox.Text = string.Empty;
+                window.Activate();
+                nameBox.Focus();
+                HeadlessClientFixture.DrainUiQueue();
+                window.KeyTextInput("Ana");
+                window.UpdateLayout();
 
-            Assert.Equal("Ana", nameBox.Text);
-        }
-        finally
-        {
-            window.Close();
-        }
+                Assert.Equal("Ana", nameBox.Text);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
     // ---------- 7.5: los botones de ajustes tienen padding ----------
@@ -188,18 +209,21 @@ public sealed class ClientUiTests
     [InlineData("ResetSettingsButton")]
     public void Los_botones_de_ajustes_tienen_padding_horizontal(string name)
     {
-        var window = CreateWindow();
-        try
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            var button = window.FindControl<Button>(name)!;
+            var window = CreateWindow();
+            try
+            {
+                var button = window.FindControl<Button>(name)!;
 
-            Assert.True(button.Padding.Left >= 12, $"El boton {name} no tiene padding horizontal ({button.Padding}).");
-            Assert.True(button.Padding.Right >= 12, $"El boton {name} no tiene padding horizontal ({button.Padding}).");
-        }
-        finally
-        {
-            window.Close();
-        }
+                Assert.True(button.Padding.Left >= 12, $"El boton {name} no tiene padding horizontal ({button.Padding}).");
+                Assert.True(button.Padding.Right >= 12, $"El boton {name} no tiene padding horizontal ({button.Padding}).");
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
     // ---------- 7.7: ordenar por nombre es un boton funcional ----------
@@ -207,24 +231,27 @@ public sealed class ClientUiTests
     [Fact]
     public void El_boton_de_ordenar_alterna_el_sentido_del_orden()
     {
-        var window = CreateWindow();
-        try
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            var button = window.FindControl<Button>("SortButton")!;
-            var text = window.FindControl<TextBlock>("SortText")!;
+            var window = CreateWindow();
+            try
+            {
+                var button = window.FindControl<Button>("SortButton")!;
+                var text = window.FindControl<TextBlock>("SortText")!;
 
-            Assert.Contains("A-Z", text.Text, StringComparison.Ordinal);
+                Assert.Contains("A-Z", text.Text, StringComparison.Ordinal);
 
-            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Contains("Z-A", text.Text, StringComparison.Ordinal);
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("Z-A", text.Text, StringComparison.Ordinal);
 
-            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Assert.Contains("A-Z", text.Text, StringComparison.Ordinal);
-        }
-        finally
-        {
-            window.Close();
-        }
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Assert.Contains("A-Z", text.Text, StringComparison.Ordinal);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 
     // ---------- 7.6: el boton de refrescar existe y esta habilitado ----------
@@ -232,17 +259,20 @@ public sealed class ClientUiTests
     [Fact]
     public void El_boton_de_actualizar_catalogo_existe()
     {
-        var window = CreateWindow();
-        try
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            var refresh = window.FindControl<Button>("RefreshCatalogButton")!;
+            var window = CreateWindow();
+            try
+            {
+                var refresh = window.FindControl<Button>("RefreshCatalogButton")!;
 
-            Assert.NotNull(refresh);
-            Assert.True(refresh.IsEnabled);
-        }
-        finally
-        {
-            window.Close();
-        }
+                Assert.NotNull(refresh);
+                Assert.True(refresh.IsEnabled);
+            }
+            finally
+            {
+                window.Close();
+            }
+        });
     }
 }

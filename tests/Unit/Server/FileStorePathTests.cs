@@ -186,7 +186,9 @@ public sealed class FileStorePathTests
             await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(gameId, image));
 
             // Ni fuera de la raiz ni dentro: no se guarda ninguna portada con ese identificador.
-            Assert.Empty(Directory.GetFiles(sandbox.FullName, "*.png").Where(f => f != image));
+            Assert.DoesNotContain(
+                Directory.GetFiles(sandbox.FullName, "*.png"),
+                f => f != image);
             Assert.Empty(Directory.GetFiles(root, "*.png"));
         }
         finally
