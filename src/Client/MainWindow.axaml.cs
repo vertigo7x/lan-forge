@@ -51,6 +51,11 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Los ajustes se reparten en una o dos columnas segun el ancho disponible:
+        // al redimensionar la ventana hay que recalcularlo.
+        SettingsView.SizeChanged += (_, _) => UpdateSettingsLayout();
+
         GamesGrid.ItemsSource = _cards;
         SteamList.ItemsSource = _steamGames;
         _steamScanner = new SteamLibraryScanner(new JsonlClientLog(_options.DataDirectory));
@@ -184,6 +189,13 @@ public partial class MainWindow : Window
         SettingsView.IsVisible = button == NavSettings;
         ChatView.IsVisible = button == NavChat;
         SteamView.IsVisible = button == NavSteam;
+        if (button == NavSettings)
+        {
+            // La vista de ajustes estaba oculta: su ancho es el de antes, asi que el
+            // reparto en columnas se recalcula al entrar.
+            UpdateSettingsLayout();
+        }
+
         if (button == NavDownloads)
         {
             _ = RefreshOperationsAsync();
@@ -196,6 +208,40 @@ public partial class MainWindow : Window
         {
             _ = RefreshSteamAsync();
         }
+    }
+
+    /// <summary>
+    /// Ancho minimo que hace falta para las dos columnas de ajustes: la columna
+    /// izquierda (520), el hueco (16) y la derecha (360).
+    /// </summary>
+    private const double SettingsTwoColumnsMinWidth = 520 + 16 + 360;
+
+    /// <summary>
+    /// Reparte los ajustes en dos columnas o en una, segun el ancho disponible.
+    ///
+    /// Las columnas tenian ancho fijo (520 + 360 = 896 px) y la ventana puede bajar
+    /// a 1100 px, con lo que el area de contenido se queda en unos 797 px: la columna
+    /// derecha se salia del panel y los botones de accion, que vivian dentro de la
+    /// columna izquierda, quedaban a media pantalla. Con una sola columna todo cabe
+    /// y los botones siguen alineados al borde derecho de la seccion.
+    /// </summary>
+    private void UpdateSettingsLayout()
+    {
+        var available = SettingsView.Bounds.Width;
+        if (available <= 0)
+        {
+            return;
+        }
+
+        var twoColumns = available >= SettingsTwoColumnsMinWidth;
+        SettingsColumns.ColumnDefinitions = twoColumns
+            ? new Avalonia.Controls.ColumnDefinitions("520,360")
+            : new Avalonia.Controls.ColumnDefinitions("*");
+        SettingsColumns.ColumnSpacing = twoColumns ? 16 : 0;
+
+        Grid.SetColumn(SettingsRightColumn, twoColumns ? 1 : 0);
+        Grid.SetRow(SettingsRightColumn, twoColumns ? 0 : 1);
+        Grid.SetColumnSpan(SettingsFooter, twoColumns ? 2 : 1);
     }
 
     private void SetActiveNav(Button button)

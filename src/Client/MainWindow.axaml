@@ -354,9 +354,12 @@
             <TextBlock Text="Configura tu perfil de jugador y la conexión con el servidor"
                        Theme="{StaticResource T.Body}"/>
           </StackPanel>
-          <StackPanel Orientation="Horizontal" Spacing="16" HorizontalAlignment="Left">
+          <!-- Responsive: dos columnas si hay ancho, una sola si la ventana se estrecha.
+               Las columnas se recolocan desde MainWindow.UpdateSettingsLayout. -->
+          <Grid x:Name="SettingsColumns" ColumnDefinitions="520,360" ColumnSpacing="16" RowDefinitions="Auto,Auto,Auto">
             <!-- Columna izquierda -->
-            <StackPanel Spacing="16" Width="520" HorizontalAlignment="Left">
+            <StackPanel x:Name="SettingsLeftColumn" Grid.Column="0" Grid.Row="0" Spacing="16"
+                        HorizontalAlignment="Stretch">
               <!-- set.card.profile -->
               <Border Theme="{StaticResource Card}" Padding="20">
                 <StackPanel Spacing="16">
@@ -421,16 +424,10 @@
                   </Grid>
                 </StackPanel>
               </Border>
-              <!-- set.footer -->
-              <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
-                <Button x:Name="ResetSettingsButton" Theme="{StaticResource ButtonSecondary}"
-                        Content="Restablecer" Click="OnResetSettings"/>
-                <Button x:Name="SaveSettingsButton" Theme="{StaticResource ButtonPrimary}"
-                        Content="Guardar cambios" Click="OnSaveSettings"/>
-              </StackPanel>
             </StackPanel>
             <!-- Columna derecha -->
-            <StackPanel Spacing="16" Width="360" HorizontalAlignment="Left">
+            <StackPanel x:Name="SettingsRightColumn" Grid.Column="1" Grid.Row="0" Spacing="16"
+                        HorizontalAlignment="Stretch">
               <!-- set.card.server -->
               <Border Theme="{StaticResource Card}" Padding="20">
                 <StackPanel Spacing="14">
@@ -518,7 +515,17 @@
                 </TextBlock>
               </Button>
             </StackPanel>
-          </StackPanel>
+            <!-- set.footer: los botones de accion ocupan todo el ancho de la seccion, para
+                 que queden alineados al borde derecho tanto en dos columnas como en una. -->
+            <Grid x:Name="SettingsFooter" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,4,0,0">
+              <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+                <Button x:Name="ResetSettingsButton" Theme="{StaticResource ButtonSecondary}"
+                        Content="Restablecer" Click="OnResetSettings"/>
+                <Button x:Name="SaveSettingsButton" Theme="{StaticResource ButtonPrimary}"
+                        Content="Guardar cambios" Click="OnSaveSettings"/>
+              </StackPanel>
+            </Grid>
+          </Grid>
         </StackPanel>
       </ScrollViewer>
     </Grid>

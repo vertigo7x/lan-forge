@@ -275,4 +275,61 @@ public sealed class ClientUiTests
             }
         });
     }
+
+    // ---------- responsive: los ajustes pasan a una columna al estrechar ----------
+
+    [Fact]
+    public void Los_ajustes_cambian_de_dos_a_una_columna_al_estrechar_la_ventana()
+    {
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            // En headless una ventana mostrada no se vuelve a medir al cambiar el
+            // ancho: se crea una ventana por cada ancho, como hace la prueba del chat.
+            AssertSettingsLayout(1800, expectTwoColumns: true);
+            AssertSettingsLayout(1100, expectTwoColumns: false);
+        });
+    }
+
+    private static void AssertSettingsLayout(double width, bool expectTwoColumns)
+    {
+        var window = new MainWindow { Width = width, Height = 800 };
+        window.Show();
+        window.UpdateLayout();
+        HeadlessClientFixture.DrainUiQueue();
+        window.UpdateLayout();
+        try
+        {
+            window.FindControl<Button>("NavSettings")!
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            window.UpdateLayout();
+
+            var columns = window.FindControl<Grid>("SettingsColumns")!;
+            var right = window.FindControl<StackPanel>("SettingsRightColumn")!;
+            var footer = window.FindControl<Grid>("SettingsFooter")!;
+
+            if (expectTwoColumns)
+            {
+                // Caben las dos columnas (520 + 360): la derecha queda a la derecha y
+                // los botones de accion se extienden por toda la seccion.
+                Assert.Equal(2, columns.ColumnDefinitions.Count);
+                Assert.Equal(1, Grid.GetColumn(right));
+                Assert.Equal(0, Grid.GetRow(right));
+                Assert.Equal(2, Grid.GetColumnSpan(footer));
+            }
+            else
+            {
+                // El area se queda corta para las dos columnas: todo pasa a una sola,
+                // la derecha baja debajo de la izquierda y los botones quedan alineados
+                // al borde derecho de la seccion entera.
+                Assert.Equal(1, columns.ColumnDefinitions.Count);
+                Assert.Equal(0, Grid.GetColumn(right));
+                Assert.Equal(1, Grid.GetRow(right));
+                Assert.Equal(1, Grid.GetColumnSpan(footer));
+            }
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
 }
