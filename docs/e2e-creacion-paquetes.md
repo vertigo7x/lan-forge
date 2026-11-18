@@ -1,12 +1,22 @@
 # Pruebas e2e del flujo de creación de paquetes
 
-Pruebas end-to-end del caso de **éxito** del flujo de creación de paquetes: el
-formulario real de Avalonia, con sus controles reales, envía el formulario contra
-el endpoint real (`POST /api/v1/packages`) de un Kestrel de verdad.
+Pruebas end-to-end del flujo de creación de paquetes: el formulario real de
+Avalonia, con sus controles reales, envía el formulario contra el endpoint real
+(`POST /api/v1/packages`) de un Kestrel de verdad.
+
+Cubre los tres casos del criterio de aceptación:
+
+| Caso | Frontera de UI (xUnit + Avalonia headless) | Frontera de red (Playwright) |
+|---|---|---|
+| **Éxito** | `tests/Unit/Server/PackageCreateSuccessE2ETests.cs` | `e2e/network.spec.ts` (flujo publicar → catálogo → manifiesto → descarga) |
+| **Fallo de validación** | `tests/Unit/Server/PackageCreateValidationFailureE2ETests.cs` | `e2e/validation-failure.spec.ts` |
+| **Envío duplicado** | `tests/Unit/Server/PackageCreateDuplicateSubmissionE2ETests.cs` | `e2e/duplicate-submission.spec.ts` |
 
 | Fichero | Qué cubre |
 |---|---|
 | `tests/Unit/Server/PackageCreateSuccessE2ETests.cs` | Caso de éxito completo: rellenar los seis campos, pulsar el botón real, comprobar la confirmación en pantalla, comprobar la petición que llegó al endpoint y comprobar que el paquete quedó publicado. |
+| `tests/Unit/Server/PackageCreateValidationFailureE2ETests.cs` | El endpoint responde `400 validation_failed` con un error por campo: cada mensaje aparece en el control de error de **su** campo, sin confirmación de éxito. Incluye el caso en que la validación local corta el envío antes de llamar al endpoint. |
+| `tests/Unit/Server/PackageCreateDuplicateSubmissionE2ETests.cs` | Doble click y varios clicks seguidos sobre el botón real: el endpoint recibe **exactamente una** petición. |
 | `tests/Unit/TestInfrastructure/SynchronousHttpHandler.cs` | Infraestructura: observa la petición HTTP real y la deja llegar al servidor real. Es el equivalente de `page.route()` / `cy.intercept()` para una app sin navegador. |
 
 ## Por qué en `tests/Unit` y no en `e2e/` (Playwright)
@@ -127,7 +137,12 @@ pruebas de UI del servidor (`PackageCreateViewComponentTests`). En la colección
 ## Ejecutar
 
 ```bash
-dotnet test tests/Unit --configuration Release --filter "FullyQualifiedName~PackageCreateSuccessE2ETests"
+# Las tres clases de pruebas e2e de UI del formulario
+dotnet test tests/Unit --configuration Release \
+  --filter "FullyQualifiedName~PackageCreateSuccessE2ETests|FullyQualifiedName~PackageCreateValidationFailureE2ETests|FullyQualifiedName~PackageCreateDuplicateSubmissionE2ETests"
+
+# La frontera de red, contra el servidor real
+npm run e2e
 ```
 
 ## Nota sobre el puerto y las conexiones
@@ -142,3 +157,30 @@ prueba). La dirección real se lee después del arranque, de
 Las peticiones HTTP de la prueba se lanzan con `Connection: close`: si se dejan
 abiertas (keep-alive), el servidor sigue con la conexión viva y al parar el host
 se queda esperando a que expire el tiempo de inactividad.
+
+## Hallazgo colateral: dos peticiones idénticas simultáneas devuelven 500
+
+Al ejecutar la suite de Playwright con las dos peticiones **simultáneas** (el
+efecto de un doble click que llegase a salir) se ve en el log del servidor:
+
+```
+System.IO.FileNotFoundException: Could not find file '.../packages/e2e-par-xxx.zip.tmp'.
+   at System.IO.File.Move(String sourceFileName, String destFileName, Boolean overwrite)
+   at LanForge.Server.Infrastructure.FilePackageContentStore.ImportArchive(...)
+```
+
+La causa está en el servidor, no en la UI: `FilePackageContentStore` deriva el
+fichero temporal del id del paquete (`{gameId}.zip.tmp`) y las dos importaciones
+compiten por el mismo fichero.
+
+**La UI impide que la duplicada llegue al servidor**: el doble click lanza
+exactamente una petición (`PackageCreateDuplicateSubmissionE2ETests`), así que
+en el uso real este 500 no se alcanza. En secuencia, el servidor responde bien
+(201 la primera, 409 la segunda del mismo juego y versión).
+
+Por eso `e2e/duplicate-submission.spec.ts` no fija el código de estado en el
+caso de las dos peticiones simultáneas: comprueba la **garantía** que el
+servidor sí da (nunca dos paquetes publicados para el mismo juego), en lugar de
+un código concreto que depende de esta carrera. Arreglar la carrera del
+servidor es trabajo aparte y queda fuera del alcance de estas pruebas.
+
