@@ -209,7 +209,14 @@ public sealed class FileStorePathTests
 
             // El nombre guardado debe ser el que la lectura acepta (extension en minusculas).
             Assert.Equal("quake3.png", fileName);
-            Assert.NotNull(await store.OpenReadAsync(fileName));
+
+            // El flujo se cierra antes de borrar el directorio: en Windows un fichero
+            // abierto bloquea el borrado y el test fallaba al limpiar el temporal.
+            await using (var read = await store.OpenReadAsync(fileName))
+            {
+                Assert.NotNull(read);
+            }
+
             Assert.True(await store.DeleteAsync(fileName));
         }
         finally
