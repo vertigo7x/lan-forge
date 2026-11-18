@@ -321,7 +321,7 @@ public sealed class ClientUiTests
                 // El area se queda corta para las dos columnas: todo pasa a una sola,
                 // la derecha baja debajo de la izquierda y los botones quedan alineados
                 // al borde derecho de la seccion entera.
-                Assert.Equal(1, columns.ColumnDefinitions.Count);
+                Assert.Single(columns.ColumnDefinitions);
                 Assert.Equal(0, Grid.GetColumn(right));
                 Assert.Equal(1, Grid.GetRow(right));
                 Assert.Equal(1, Grid.GetColumnSpan(footer));
