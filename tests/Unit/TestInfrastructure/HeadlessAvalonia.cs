@@ -30,6 +30,11 @@ public static class HeadlessAvalonia
         {
             lock (Gate)
             {
+                // La aplicacion debe estar registrada antes que la sesion: al revés,
+                // la sesion arranca con la aplicacion por defecto y las vistas del
+                // servidor no cargan sus recursos.
+                EnsureStartedCore();
+
                 return _session ??= HeadlessUnitTestSession.GetOrStartForAssembly(
                     Assembly.GetExecutingAssembly());
             }
@@ -44,20 +49,31 @@ public static class HeadlessAvalonia
     {
         lock (Gate)
         {
-            if (Avalonia.Application.Current is not null)
-            {
-                return;
-            }
-
-            AppBuilder.Configure<LanForge.Client.App>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
-                .SetupWithoutStarting();
+            EnsureStartedCore();
         }
+    }
+
+    /// <summary>
+    /// Registra la plataforma headless. El llamador mantiene el cerrojo.
+    /// </summary>
+    private static void EnsureStartedCore()
+    {
+        if (Avalonia.Application.Current is not null)
+        {
+            return;
+        }
+
+        AppBuilder.Configure<LanForge.Client.App>()
+            .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+            .SetupWithoutStarting();
     }
 
     /// <summary>
     /// Deja que termine el trabajo pendiente del hilo de UI (por ejemplo la carga
     /// asincrona de los ajustes o del catalogo).
+    ///
+    /// Debe llamarse desde el hilo de la interfaz: <c>RunJobs</c> solo se puede
+    /// ejecutar alli.
     /// </summary>
     public static void DrainUiQueue()
     {
@@ -72,6 +88,9 @@ public static class HeadlessAvalonia
     /// Ejecuta una sola vez las tareas pendientes del hilo de UI, sin esperar. Se usa
     /// cuando el test solo necesita vaciar la cola del dispatcher, no esperar a que
     /// termine una carga asincrona.
+    ///
+    /// Debe llamarse desde el hilo de la interfaz: <c>RunJobs</c> solo se puede
+    /// ejecutar alli.
     /// </summary>
     public static void RunUiJobs() => Dispatcher.UIThread.RunJobs();
 
@@ -109,9 +128,47 @@ public static class HeadlessAvalonia
     }
 
     /// <summary>
+    /// Ejecuta la accion en el hilo de UI y espera a que termine.
+    ///
+    /// A diferencia de <see cref="RunOnUiThread"/>, aqui se espera al despacho: la
+    /// accion se ejecuta en el hilo de la interfaz y el metodo no vuelve hasta que ha
+    /// terminado. Asi el test puede leer el resultado sin condiciones de carrera.
+    ///
+    /// No se puede llamar desde dentro de otra accion de la interfaz: el hilo de UI
+    /// se bloquearia esperando a si mismo.
+    /// </summary>
+    public static void RunOnUiThreadAndWait(Action action)
+    {
+        Exception? failure = null;
+        Session.Dispatch(() =>
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+            }
+        }, CancellationToken.None).GetAwaiter().GetResult();
+
+        if (failure is not null)
+        {
+            throw new InvalidOperationException(
+                "La prueba de UI fallo en el hilo de UI de Avalonia.", failure);
+        }
+    }
+
+    /// <summary>
     /// Ejecuta la accion asincrona en el hilo de UI de Avalonia y propaga al hilo del
     /// test cualquier fallo.
     /// </summary>
+    /// <remarks>
+    /// <c>HeadlessUnitTestSession.Dispatch</c> no espera a la tarea que devuelve la
+    /// accion: hay que esperarla aqui. Sin esto, el metodo vuelve antes de que la
+    /// accion haya terminado y el hilo de UI se queda sin bombear las continuaciones
+    /// pendientes.
+    /// </remarks>
     public static async Task RunOnUiThreadAsync(Func<Task> action)
     {
         Exception? failure = null;

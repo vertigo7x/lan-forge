@@ -27,6 +27,14 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private string? _entryPointError;
     private string? _argumentsError;
 
+    /// <summary>
+    /// Errores por campo devueltos por el servidor en el ultimo envio. Se guardan
+    /// aparte de los errores mostrados para poder conservar el mensaje del servidor
+    /// cuando el usuario edita el campo y la validación de cliente no se queja
+    /// (por ejemplo, "la carpeta origen no existe" solo lo puede saber el servidor).
+    /// </summary>
+    private readonly Dictionary<string, string> _serverFieldErrors = new(StringComparer.Ordinal);
+
     private bool _isSubmitting;
     private bool _canSubmit = true;
     private string? _statusMessage;
@@ -34,7 +42,9 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
     public PackageCreateViewModel(IPackageCreationService service)
     {
+        ArgumentNullException.ThrowIfNull(service);
         _service = service;
+
         SubmitCommand = new DelegateCommand(SubmitAsync);
         ResetCommand = new DelegateCommand(() =>
         {
@@ -188,7 +198,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         var clientErrors = PackageCreationValidator.Validate(request);
         if (clientErrors.Count > 0)
         {
-            ApplyFieldErrors(clientErrors);
+            ApplyClientErrors(clientErrors);
             StatusMessage = "Revisa los campos marcados: no se ha creado el paquete.";
             StatusIsError = true;
             return;
@@ -210,7 +220,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
                 return;
             }
 
-            ApplyFieldErrors(result.FieldErrors);
+            ApplyServerErrors(result.FieldErrors);
             StatusMessage = result.ErrorMessage ?? "No se ha podido crear el paquete.";
             StatusIsError = true;
         }
@@ -254,7 +264,11 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             EntryPoint.Trim(),
             string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim());
 
-    private void ApplyFieldErrors(IReadOnlyDictionary<string, string> errors)
+    /// <summary>
+    /// Muestra los errores de la validación de cliente. No toca los errores del
+    /// servidor: todavia no se ha enviado nada.
+    /// </summary>
+    private void ApplyClientErrors(IReadOnlyDictionary<string, string> errors)
     {
         GameIdError = errors.GetValueOrDefault(PackageCreationFields.GameId);
         TitleError = errors.GetValueOrDefault(PackageCreationFields.Title);
@@ -264,9 +278,28 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         ArgumentsError = errors.GetValueOrDefault(PackageCreationFields.Arguments);
     }
 
+    /// <summary>
+    /// Muestra los errores por campo que devuelve el servidor. Se guardan aparte de
+    /// los errores mostrados porque son los unicos que la validación de cliente no
+    /// puede reproducir (carpeta inexistente, ejecutable que no esta en el paquete).
+    /// Si el usuario edita el campo y el cliente ya no se queja, el mensaje del
+    /// servidor se conserva hasta el siguiente envío.
+    /// </summary>
+    private void ApplyServerErrors(IReadOnlyDictionary<string, string> errors)
+    {
+        _serverFieldErrors.Clear();
+        foreach (var error in errors)
+        {
+            _serverFieldErrors[error.Key] = error.Value;
+        }
+
+        ApplyClientErrors(errors);
+    }
+
     private void ClearErrors()
     {
-        ApplyFieldErrors(new Dictionary<string, string>());
+        _serverFieldErrors.Clear();
+        ApplyClientErrors(new Dictionary<string, string>());
     }
 
     private void SetField<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
@@ -283,7 +316,71 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         // el mensaje refleje el valor actual.
         if (HasErrorFor(propertyName))
         {
-            ApplyFieldErrors(PackageCreationValidator.Validate(BuildRequest()));
+            RefreshFieldError(propertyName);
+        }
+    }
+
+    /// <summary>
+    /// Recalcula el error de un campo tras editarlo. La validación de cliente manda
+    /// cuando se queja; si el cliente ya no ve problema, se conserva el mensaje del
+    /// servidor, que sigue siendo el dato válido (por ejemplo, "la carpeta origen no
+    /// existe" solo lo puede saber el servidor) hasta el siguiente envío.
+    /// </summary>
+    private void RefreshFieldError(string? propertyName)
+    {
+        var clientErrors = PackageCreationValidator.Validate(BuildRequest());
+        var fieldKey = FieldKeyFor(propertyName);
+        if (fieldKey is null)
+        {
+            return;
+        }
+
+        if (clientErrors.TryGetValue(fieldKey, out var clientMessage))
+        {
+            SetFieldError(fieldKey, clientMessage);
+            return;
+        }
+
+        // Sin error de cliente: el mensaje del servidor se mantiene si lo habia.
+        var serverMessage = _serverFieldErrors.GetValueOrDefault(fieldKey);
+        SetFieldError(fieldKey, serverMessage);
+    }
+
+    /// <summary>Traduce el nombre de una propiedad del formulario a la clave de campo.</summary>
+    private static string? FieldKeyFor(string? propertyName) => propertyName switch
+    {
+        nameof(GameId) => PackageCreationFields.GameId,
+        nameof(Title) => PackageCreationFields.Title,
+        nameof(Version) => PackageCreationFields.Version,
+        nameof(SourceDirectory) => PackageCreationFields.SourceDirectory,
+        nameof(EntryPoint) => PackageCreationFields.EntryPoint,
+        nameof(Arguments) => PackageCreationFields.Arguments,
+        _ => null,
+    };
+
+    /// <summary>Asigna el mensaje de error de un campo concreto.</summary>
+    private void SetFieldError(string fieldKey, string? message)
+    {
+        switch (fieldKey)
+        {
+            case PackageCreationFields.GameId:
+                GameIdError = message;
+                break;
+            case PackageCreationFields.Title:
+                TitleError = message;
+                break;
+            case PackageCreationFields.Version:
+                VersionError = message;
+                break;
+            case PackageCreationFields.SourceDirectory:
+                SourceDirectoryError = message;
+                break;
+            case PackageCreationFields.EntryPoint:
+                EntryPointError = message;
+                break;
+            case PackageCreationFields.Arguments:
+                ArgumentsError = message;
+                break;
         }
     }
 
