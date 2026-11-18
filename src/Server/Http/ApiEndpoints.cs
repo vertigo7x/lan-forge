@@ -199,8 +199,9 @@ public static class ApiEndpoints
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
             var reporter = new DownloadCompletionReporter(store, log);
+            var transfer = new DownloadTransferTracker(context);
             var completion = new NotifyStream(archive.Stream, () =>
-                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
+                reporter.Report(operationId, clientId, detail, started, IsAborted(transfer)));
 
             return Results.Stream(completion, contentType: "application/zip", fileDownloadName: $"{packageId}.zip", enableRangeProcessing: true);
         });
@@ -224,20 +225,26 @@ public static class ApiEndpoints
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
             var reporter = new DownloadCompletionReporter(store, log);
+            var transfer = new DownloadTransferTracker(context);
             var completion = new NotifyStream(file.Stream, () =>
-                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
+                reporter.Report(operationId, clientId, detail, started, IsAborted(transfer)));
 
             return Results.Stream(completion, contentType: "application/octet-stream", fileDownloadName: Path.GetFileName(file.Entry.Path), enableRangeProcessing: true);
         });
     }
 
     /// <summary>
-    /// Indica si el cliente corto la transferencia. Kestrel cancela el token de la peticion
-    /// cuando el cliente abandona la conexion, y el token ya esta cancelado cuando el stream
-    /// se cierra. Una descarga terminada a fondo (con su Range) no lo tiene cancelado.
+    /// Indica si el cliente corto la transferencia. La senal es la cuenta de bytes: la
+    /// respuesta declara cuantos bytes lleva y el servidor sabe cuantos salieron. Si no
+    /// coinciden, la transferencia se corto a mitad.
+    ///
+    /// Antes se miraba <see cref="HttpContext.RequestAborted"/>: ese token se cancela en
+    /// desorden respecto al fallo de escritura, asi que una descarga completa se podia
+    /// registrar como cancelada y una cortada como completada. La cuenta de bytes no tiene
+    /// esa ambiguedad y ademas respeta el Range (la respuesta de un rango declara la
+    /// longitud del rango, no la del archivo).
     /// </summary>
-    private static bool IsAborted(HttpContext context) =>
-        context.RequestAborted.IsCancellationRequested;
+    private static bool IsAborted(DownloadTransferTracker transfer) => !transfer.IsComplete;
 
     private static string? GetClientId(HttpContext context) =>
         context.Request.Headers.TryGetValue(ClientIdHeader, out var values) && !string.IsNullOrWhiteSpace(values.FirstOrDefault())

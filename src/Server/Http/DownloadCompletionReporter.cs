@@ -6,13 +6,15 @@ namespace LanForge.Server.Http;
 
 /// <summary>
 /// Cierra la operacion de una descarga. El cierre del stream no dice si la transferencia
-/// llego entera o se corto: eso lo dice la peticion. Si el cliente se va a mitad, la
-/// peticion queda cancelada y la operacion se registra como Failed, no como Completed.
+/// llego entera o se corto: eso lo dice la cuenta de bytes. Si el cliente se va a mitad,
+/// la operacion se registra como Failed, no como Completed.
 /// </summary>
 /// <remarks>
-/// La senal es <see cref="HttpContext.RequestAborted"/>: Kestrel cancela ese token cuando el
-/// cliente corta la conexion, y el token ya esta cancelado cuando el stream se cierra. Antes,
-/// toda descarga se registraba como Completed, tambien las cortadas: las metricas y el
+/// La senal es la cuenta de bytes: la respuesta declara cuantos bytes lleva y el servidor
+/// sabe cuantos salieron. Antes se usaba <see cref="HttpContext.RequestAborted"/>: ese token
+/// se cancela en desorden respecto al fallo de escritura, asi que una descarga completa se
+/// podia registrar como cancelada y una cortada como completada. Antes de esto, toda
+/// descarga se registraba como Completed, tambien las cortadas: las metricas y el
 /// diagnostico mintian justo en el caso que hace falta depurar.
 /// </remarks>
 public sealed class DownloadCompletionReporter
