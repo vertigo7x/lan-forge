@@ -43,6 +43,17 @@ $env:LANFORGE_E2E_DISCOVER = "1"   # opcional: valida también mDNS
 dotnet test tests/E2E
 ```
 
+## E2E con Playwright (API del servidor real)
+
+```bash
+npm install
+npm run e2e   # levanta el servidor real en modo --headless y ejecuta la suite
+```
+
+La suite verifica la superficie HTTP real del servidor (`/api/v1/*`): arranque,
+catálogo, publicación de paquetes, manifiesto y descarga. Documentación y
+justificación del framework: [`docs/e2e-playwright.md`](docs/e2e-playwright.md).
+
 ## Datos en disco
 
 | App | Ubicación |
