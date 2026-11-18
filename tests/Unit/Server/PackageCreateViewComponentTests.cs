@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 using LanForge.Server.Application;
 using LanForge.Server.Views;
 
@@ -10,14 +10,22 @@ namespace LanForge.UnitTests.Server;
 /// Pruebas de componente del formulario de creación de paquetes.
 /// La capa de servicio se sustituye por un doble de prueba; no se usa ni el
 /// servidor real ni el servicio simulado de producción.
+///
+/// El fixture arranca Avalonia en headless: sin él, las vistas no se cargan.
+/// Comparte la colección "Cliente-UI" con las pruebas de la UI del cliente: las
+/// ventanas de Avalonia solo se pueden construir en el hilo de UI, y ese hilo es
+/// compartido por toda la aplicación.
 /// </summary>
-[Collection("Servidor-UI")]
-public sealed class PackageCreateViewComponentTests
+[Collection("Cliente-UI")]
+public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixture)
 {
     [Fact]
     public void Renderiza_todos_los_campos_del_formulario()
     {
-        var window = Show(CreateView(new RecordingPackageCreationService()));
+        // El fixture deja el contenedor de servicios del servidor disponible.
+        Assert.NotNull(fixture.Services);
+
+        var (_, window) = ShowView(new RecordingPackageCreationService());
 
         var textBoxes = Descendants<TextBox>(window);
         Assert.Equal(6, textBoxes.Length);
@@ -28,18 +36,17 @@ public sealed class PackageCreateViewComponentTests
         Assert.Contains(textBoxes, box => box.Name == "EntryPointBox");
         Assert.Contains(textBoxes, box => box.Name == "ArgumentsBox");
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     [Fact]
-    public async Task Muestra_un_mensaje_de_error_en_cada_campo_requerido()
+    public void Muestra_un_mensaje_de_error_en_cada_campo_requerido()
     {
         var service = new RecordingPackageCreationService();
-        var view = CreateView(service);
-        var window = Show(view);
+        var (view, window) = ShowView(service);
 
-        await view.SubmitAsync();
-        HeadlessServerFixture.RunUiJobs();
+        Submit(view);
+        HeadlessAvalonia.RunUiJobs();
 
         var errors = ErrorTexts(window);
         Assert.Equal("El id del juego es obligatorio.", errors["GameIdErrorText"]);
@@ -49,50 +56,48 @@ public sealed class PackageCreateViewComponentTests
         Assert.Equal("Indica el ejecutable del juego.", errors["EntryPointErrorText"]);
         Assert.Empty(service.Requests);
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     [Fact]
-    public async Task Muestra_el_error_de_formato_en_el_campo_correspondiente()
+    public void Muestra_el_error_de_formato_en_el_campo_correspondiente()
     {
         var service = new RecordingPackageCreationService();
-        var view = CreateView(service);
-        var window = Show(view);
+        var (view, window) = ShowView(service);
 
-        HeadlessServerFixture.RunOnUiThread(() => view.SetFormValues(
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
             "id con espacios",
             "Neon Drift",
             "no-es-una-version",
             "/games/neon",
             "game.exe",
             "--fullscreen"));
-        await view.SubmitAsync();
-        HeadlessServerFixture.RunUiJobs();
+        Submit(view);
+        HeadlessAvalonia.RunUiJobs();
 
         var errors = ErrorTexts(window);
         Assert.Contains("Id de juego inválido", errors["GameIdErrorText"], StringComparison.Ordinal);
         Assert.Contains("Versión inválida", errors["VersionErrorText"], StringComparison.Ordinal);
         Assert.Empty(service.Requests);
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     [Fact]
-    public async Task Muestra_el_error_de_longitud_en_el_campo_correspondiente()
+    public void Muestra_el_error_de_longitud_en_el_campo_correspondiente()
     {
         var service = new RecordingPackageCreationService();
-        var view = CreateView(service);
-        var window = Show(view);
+        var (view, window) = ShowView(service);
 
-        HeadlessServerFixture.RunOnUiThread(() => view.SetFormValues(
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
             "neon-drift",
             new string('t', PackageCreationValidator.MaxTitleLength + 1),
             "1.2.3",
             "/games/neon",
             "game.exe",
             "--fullscreen"));
-        await view.SubmitAsync();
-        HeadlessServerFixture.RunUiJobs();
+        Submit(view);
+        HeadlessAvalonia.RunUiJobs();
 
         var errors = ErrorTexts(window);
         Assert.Contains(
@@ -101,25 +106,24 @@ public sealed class PackageCreateViewComponentTests
             StringComparison.Ordinal);
         Assert.Empty(service.Requests);
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     [Fact]
-    public async Task Envia_los_datos_al_servicio_sustituido()
+    public void Envia_los_datos_al_servicio_sustituido()
     {
         var service = new RecordingPackageCreationService();
-        var view = CreateView(service);
-        var window = Show(view);
+        var (view, window) = ShowView(service);
 
-        HeadlessServerFixture.RunOnUiThread(() => view.SetFormValues(
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
             "neon-drift",
             "Neon Drift",
             "1.2.3",
             "/games/neon",
             "game.exe",
             "--fullscreen"));
-        await view.SubmitAsync();
-        HeadlessServerFixture.RunUiJobs();
+        Submit(view);
+        HeadlessAvalonia.RunUiJobs();
 
         var request = Assert.Single(service.Requests);
         Assert.Equal("neon-drift", request.GameId);
@@ -129,65 +133,98 @@ public sealed class PackageCreateViewComponentTests
         Assert.Equal("game.exe", request.EntryPoint);
         Assert.Equal("--fullscreen", request.Arguments);
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     [Fact]
-    public async Task Limpia_el_formulario_tras_crear_el_paquete()
+    public void Limpia_el_formulario_tras_crear_el_paquete()
     {
         var service = new RecordingPackageCreationService();
-        var view = CreateView(service);
-        var window = Show(view);
+        var (view, window) = ShowView(service);
 
-        HeadlessServerFixture.RunOnUiThread(() => view.SetFormValues(
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
             "neon-drift",
             "Neon Drift",
             "1.2.3",
             "/games/neon",
             "game.exe",
             "--fullscreen"));
-        await view.SubmitAsync();
-        HeadlessServerFixture.RunUiJobs();
+        Submit(view);
+        HeadlessAvalonia.RunUiJobs();
 
         var textBoxes = Descendants<TextBox>(window);
-        Assert.All(textBoxes, box => Assert.Equal(string.Empty, box.Text));
+        var texts = new string[textBoxes.Length];
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            for (var i = 0; i < textBoxes.Length; i++)
+            {
+                texts[i] = textBoxes[i].Text ?? string.Empty;
+            }
+        });
+        Assert.All(texts, text => Assert.Equal(string.Empty, text));
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
-    private static PackageCreateView CreateView(IPackageCreationService service) => new(service);
-
-    private static Window Show(Control content)
+    /// <summary>
+    /// Envia el formulario y espera a que termine.
+    ///
+    /// Todo ocurre en el hilo de UI: al cambiar el estado del view model se disparan
+    /// los bindings, que tocan controles del hilo de UI, y RunJobs solo se puede
+    /// ejecutar desde ese hilo. El servicio de estas pruebas responde de inmediato,
+    /// asi que el envio no se suspende y termina en el mismo hilo.
+    /// </summary>
+    private static void Submit(PackageCreateView view)
     {
-        Window? window = null;
-        HeadlessServerFixture.RunOnUiThread(() =>
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
+            view.SubmitAsync().GetAwaiter().GetResult();
+            HeadlessAvalonia.DrainUiQueue();
+        });
+    }
+
+    /// <summary>
+    /// Crea la vista y la muestra en una ventana. La vista se construye en el hilo
+    /// de UI: es su dueño y no se puede adjuntar a una ventana desde otro hilo.
+    ///
+    /// En headless no hay renderizador, asi que el arbol visual no se realiza: las
+    /// pruebas usan el arbol logico, donde los controles y sus bindings si existen.
+    /// </summary>
+    private static (PackageCreateView View, Window Window) ShowView(IPackageCreationService service)
+    {
+        PackageCreateView? view = null;
+        Window? window = null;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            view = new PackageCreateView(service);
             window = new Window
             {
                 Width = 640,
                 Height = 700,
-                Content = content,
+                Content = view,
             };
             window.Show();
+            window.UpdateLayout();
+            HeadlessAvalonia.DrainUiQueue();
+            window.UpdateLayout();
         });
-        HeadlessServerFixture.DrainUiQueue();
-        return window!;
+        return (view!, window!);
     }
 
     private static T[] Descendants<T>(Window window) where T : Control
     {
         T[] controls = [];
-        HeadlessServerFixture.RunOnUiThread(() =>
-            controls = window.GetVisualDescendants().OfType<T>().ToArray());
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+            controls = window.GetLogicalDescendants().OfType<T>().ToArray());
         return controls;
     }
 
     private static Dictionary<string, string?> ErrorTexts(Window window)
     {
         var errors = new Dictionary<string, string?>();
-        HeadlessServerFixture.RunOnUiThread(() =>
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            foreach (var text in window.GetVisualDescendants().OfType<TextBlock>())
+            foreach (var text in window.GetLogicalDescendants().OfType<TextBlock>())
             {
                 if (!string.IsNullOrEmpty(text.Name))
                 {

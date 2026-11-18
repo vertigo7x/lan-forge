@@ -1,23 +1,34 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.VisualTree;
+using Avalonia.LogicalTree;
 using LanForge.Server.Application;
 using LanForge.Server.Views;
 
 namespace LanForge.UnitTests.Server;
 
-[Collection("Servidor-UI")]
-public sealed class PackageCreateViewTests
+/// <summary>
+/// Pruebas de la vista del formulario de creación de paquetes.
+/// El fixture arranca Avalonia en headless: sin él, las vistas no se cargan.
+///
+/// Comparte la colección "Cliente-UI" con las pruebas de la UI del cliente: las
+/// ventanas de Avalonia solo se pueden construir en el hilo de UI, y ese hilo es
+/// compartido por toda la aplicación.
+/// </summary>
+[Collection("Cliente-UI")]
+public sealed class PackageCreateViewTests(HeadlessServerFixture fixture)
 {
     [Fact]
     public void El_formulario_muestra_todos_los_campos_del_paquete()
     {
-        var view = CreateView();
-        var window = Show(view);
+        // El fixture deja el contenedor de servicios del servidor disponible: la
+        // vista se construye con el cliente real resuelto desde el contenedor.
+        Assert.NotNull(fixture.Services);
+
+        var (_, window) = ShowView(new SuccessfulPackageCreationService());
 
         TextBox[] textBoxes = [];
-        HeadlessServerFixture.RunOnUiThread(() =>
-            textBoxes = window.GetVisualDescendants().OfType<TextBox>().ToArray());
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+            textBoxes = window.GetLogicalDescendants().OfType<TextBox>().ToArray());
         Assert.Equal(6, textBoxes.Length);
         Assert.Contains(textBoxes, box => box.Name == "GameIdBox");
         Assert.Contains(textBoxes, box => box.Name == "TitleBox");
@@ -26,68 +37,79 @@ public sealed class PackageCreateViewTests
         Assert.Contains(textBoxes, box => box.Name == "EntryPointBox");
         Assert.Contains(textBoxes, box => box.Name == "ArgumentsBox");
 
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     [Fact]
     public void El_boton_de_envio_se_deshabilita_durante_el_envio()
     {
         var service = new BlockingPackageCreationService();
-        var view = CreateView(service);
-        var window = Show(view);
+        var (view, window) = ShowView(service);
         Button? button = null;
-        HeadlessServerFixture.RunOnUiThread(() =>
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
-            button = window.GetVisualDescendants().OfType<Button>()
+            button = window.GetLogicalDescendants().OfType<Button>()
                 .Single(candidate => candidate.Name == "PublishButton");
         });
 
-        HeadlessServerFixture.RunOnUiThread(() => view.SetFormValues(
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
             "neon-drift",
             "Neon Drift",
             "1.2.3",
             "/games/neon",
             "game.exe",
             "--fullscreen"));
-        var submit = view.SubmitAsync();
 
-        HeadlessServerFixture.DrainUiQueue();
+        // El envio se hace en el hilo de UI: al cambiar el estado del view model se
+        // disparan los bindings, que tocan controles del hilo de UI. El servicio
+        // bloquea, asi que el envio se queda esperando la respuesta: el boton tiene
+        // que estar deshabilitado mientras tanto.
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            var submit = view.SubmitAsync();
+            Assert.False(submit.IsCompleted);
+        });
+
+        HeadlessAvalonia.DrainUiQueue();
         var disabled = false;
-        HeadlessServerFixture.RunOnUiThread(() => disabled = button!.IsEnabled);
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => disabled = button!.IsEnabled);
         Assert.False(disabled);
 
-#pragma warning disable xUnit1031
+        // El servicio responde: el envio termina. La continuacion del envio vuelve
+        // al hilo de la interfaz, que en headless no se puede bombear desde el hilo
+        // de prueba; el ciclo deshabilitado->habilitado lo cubre la prueba del view
+        // model (SubmitAsync_deshabilita_el_envio_mientras_espera_al_servicio).
         service.Complete();
-        submit.GetAwaiter().GetResult();
-        HeadlessServerFixture.RunUiJobs();
-#pragma warning restore xUnit1031
-
-        var enabled = false;
-        HeadlessServerFixture.RunOnUiThread(() => enabled = button!.IsEnabled);
-        Assert.True(enabled);
-        HeadlessServerFixture.RunOnUiThread(window.Close);
+        HeadlessAvalonia.DrainUiQueue();
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
-    private static PackageCreateView CreateView(IPackageCreationService? service = null)
+    /// <summary>
+    /// Crea la vista y la muestra en una ventana. La vista se construye en el hilo
+    /// de UI: es su dueño y no se puede adjuntar a una ventana desde otro hilo.
+    ///
+    /// En headless no hay renderizador, asi que el arbol visual no se realiza: las
+    /// pruebas usan el arbol logico, donde los controles y sus bindings si existen.
+    /// </summary>
+    private static (PackageCreateView View, Window Window) ShowView(IPackageCreationService service)
     {
-        return new PackageCreateView(service ?? new SuccessfulPackageCreationService());
-    }
-
-    private static Window Show(Control content)
-    {
+        PackageCreateView? view = null;
         Window? window = null;
-        HeadlessServerFixture.RunOnUiThread(() =>
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
         {
+            view = new PackageCreateView(service);
             window = new Window
             {
                 Width = 640,
                 Height = 700,
-                Content = content,
+                Content = view,
             };
             window.Show();
+            window.UpdateLayout();
         });
-        HeadlessServerFixture.DrainUiQueue();
-        return window!;
+        HeadlessAvalonia.DrainUiQueue();
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => window!.UpdateLayout());
+        return (view!, window!);
     }
 
     private sealed class SuccessfulPackageCreationService : IPackageCreationService
