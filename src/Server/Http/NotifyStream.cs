@@ -1,6 +1,13 @@
 namespace LanForge.Server.Http;
 
-/// <summary>Envuelve un stream y notifica una sola vez al disponerse (descarga completada/cancelada).</summary>
+/// <summary>
+/// Envuelve un stream y notifica una sola vez al disponerse (descarga completada/cancelada).
+/// </summary>
+/// <remarks>
+/// El aviso se dispara cuando se cierra el stream, que es DESPUES de que la copia al cliente
+/// haya terminado (o haya fallado). Por eso el cierre no dice por si solo si la transferencia
+/// se completo: eso lo dice la cuenta de bytes, que es determinista.
+/// </remarks>
 public sealed class NotifyStream : Stream
 {
     private readonly Stream _inner;
@@ -27,6 +34,12 @@ public sealed class NotifyStream : Stream
     public override void Flush() => _inner.Flush();
 
     public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+
+    public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
+        _inner.ReadAsync(buffer, cancellationToken);
+
+    public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+        _inner.ReadAsync(buffer, offset, count, cancellationToken);
 
     public override long Seek(long offset, SeekOrigin origin) => _inner.Seek(offset, origin);
 
