@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using LanForge.Server.Application;
 using LanForge.Server.Views;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LanForge.UnitTests.Server;
 
@@ -19,6 +20,16 @@ namespace LanForge.UnitTests.Server;
 [Collection("Cliente-UI")]
 public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixture)
 {
+    [Fact]
+    public void El_contenedor_resuelve_el_cliente_real_del_endpoint()
+    {
+        // El formulario no usa la simulacion: la vista recibe el cliente HTTP real
+        // desde el contenedor de servicios del servidor.
+        var service = fixture.Services.GetRequiredService<IPackageCreationService>();
+
+        Assert.IsType<HttpPackageCreationService>(service);
+    }
+
     [Fact]
     public void Renderiza_todos_los_campos_del_formulario()
     {

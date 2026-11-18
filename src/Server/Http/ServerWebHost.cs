@@ -37,15 +37,43 @@ public static class ServerWebHost
         builder.Services.AddSingleton<CatalogService>();
         builder.Services.AddSingleton<CreatePackageUseCase>();
 
-        // Capa de servicio del formulario de creacion de paquetes. Ahora mismo se
-        // resuelve con la simulacion (no toca la red); cuando exista el cliente
-        // HTTP real, basta cambiar esta linea por la implementacion real: los
-        // consumidores dependen de IPackageCreationService, no de esta clase.
-        builder.Services.AddSingleton<IPackageCreationService, MockPackageCreationService>();
+        // Capa de servicio del formulario de creacion de paquetes. El formulario de
+        // la UI habla con el endpoint real por HTTP: el servidor se llama a si mismo
+        // por el bucle local, de modo que la peticion recorre la misma ruta que
+        // cualquier otro cliente (POST /api/v1/packages) y los errores por campo que
+        // devuelve el servidor llegan intactos a los campos del formulario.
+        //
+        // La direccion se resuelve en el primer uso, no al registrar: el puerto puede
+        // ser 0 (el sistema elige uno libre) y la direccion real solo se conoce con el
+        // host ya arrancado.
+        builder.Services.AddSingleton<IPackageCreationService>(sp =>
+            new HttpPackageCreationService(() => ResolveLocalAddress(sp, options)));
 
         var app = builder.Build();
         app.MapHub<ChatHub>(ChatHub.Path);
         app.MapLanForgeApi();
         return app;
+    }
+
+    /// <summary>
+    /// Direccion local del propio servidor, para que el formulario se llame a si
+    /// mismo por la misma ruta que usaria cualquier otro cliente.
+    ///
+    /// Si el host ya esta arrancado se usa la direccion real (sirve para el puerto 0,
+    /// donde el sistema elige uno libre). Si todavia no ha arrancado, se usa la
+    /// configurada.
+    /// </summary>
+    private static string ResolveLocalAddress(IServiceProvider services, ServerOptions options)
+    {
+        var server = services.GetService<Microsoft.AspNetCore.Hosting.Server.IServer>();
+        var addresses = server?.Features
+            .Get<Microsoft.AspNetCore.Hosting.Server.Features.IServerAddressesFeature>();
+        var bound = addresses?.Addresses.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(bound))
+        {
+            return bound;
+        }
+
+        return $"http://127.0.0.1:{options.HttpPort}";
     }
 }
