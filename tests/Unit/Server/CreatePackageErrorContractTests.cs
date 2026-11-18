@@ -173,8 +173,11 @@ public sealed class CreatePackageErrorContractTests
         public Task<bool> DeleteGameAsync(string gameId, CancellationToken cancellationToken = default) =>
             _inner.DeleteGameAsync(gameId, cancellationToken);
 
-        public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(CancellationToken cancellationToken = default) =>
-            _inner.ListOperationsAsync(cancellationToken);
+        public Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(int limit = ICatalogStore.DefaultOperationsLimit, CancellationToken cancellationToken = default) =>
+            _inner.ListOperationsAsync(limit, cancellationToken);
+
+        public Task<int> PruneOperationsAsync(DateTimeOffset olderThan, CancellationToken cancellationToken = default) =>
+            _inner.PruneOperationsAsync(olderThan, cancellationToken);
     }
 
     private sealed class NoOpContentStore : IPackageContentStore

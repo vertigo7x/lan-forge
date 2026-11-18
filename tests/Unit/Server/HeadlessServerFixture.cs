@@ -18,6 +18,14 @@ public sealed class HeadlessServerFixture : IDisposable
 
     public HeadlessServerFixture()
     {
+        // Avalonia en headless es un singleton por proceso: sin el, las vistas no se
+        // cargan (InitializeComponent deja el arbol visual vacio).
+        HeadlessAvalonia.EnsureStarted();
+
+        // La sesion headless crea el hilo de UI y lo mantiene vivo: las ventanas se
+        // construyen ahi, y no en el hilo del test.
+        _ = HeadlessAvalonia.Session;
+
         // Puerto 0: el sistema elige uno libre, asi que el test no depende del 8710.
         _app = ServerWebHost.CreateApp(
             new ServerOptions(_temp.Path, HttpPort: 0, ListenAddress: "127.0.0.1"));
