@@ -34,6 +34,16 @@ public sealed class FileCoverStore : ICoverStore
         }
 
         var fileName = $"{gameId}{extension.ToLowerInvariant()}";
+
+        // El nombre que se guarda tiene que ser el mismo que la lectura y el borrado aceptan:
+        // nada de rutas, nada de traversal, nada de nombres que el servidor no podra releer.
+        if (!FileNamePattern.IsMatch(fileName))
+        {
+            throw new ArgumentException(
+                $"El nombre de portada '{fileName}' no es valido: usa el identificador del juego sin rutas.",
+                nameof(gameId));
+        }
+
         File.Copy(sourceImagePath, Path.Combine(_root, fileName), overwrite: true);
         return Task.FromResult(fileName);
     }

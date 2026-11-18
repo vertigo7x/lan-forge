@@ -83,6 +83,23 @@ public sealed class ChatRoomRegistry
         }
     }
 
+    /// <summary>
+    /// Indica si una conexion concreta pertenece a un canal. La pertenencia se guarda por
+    /// connectionId: dos jugadores pueden llamarse igual y eso no los hace el mismo miembro.
+    /// </summary>
+    public bool IsMember(string connectionId, string channel)
+    {
+        if (!_channels.TryGetValue(channel, out var state))
+        {
+            return false;
+        }
+
+        lock (state)
+        {
+            return state.Members.ContainsKey(connectionId);
+        }
+    }
+
     public IReadOnlyList<ChatChannelInfo> List() =>
         _channels
             .Select(pair => new ChatChannelInfo(pair.Key, Members(pair.Key).Count))

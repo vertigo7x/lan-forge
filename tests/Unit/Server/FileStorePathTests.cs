@@ -83,6 +83,65 @@ public sealed class FileStorePathTests
         }
     }
 
+    [Theory]
+    [InlineData(@"..\..\escape")]
+    [InlineData("../escape")]
+    [InlineData("..")]
+    [InlineData("sub/carpeta")]
+    [InlineData("")]
+    public async Task FilePackageContentStore_no_importa_fuera_de_su_raiz(string packageId)
+    {
+        // Sandbox privado: el "padre" de la raiz debe ser nuestro, para poder afirmar que no
+        // aparecio ningun .zip fuera sin ver ficheros de otros.
+        var sandbox = Directory.CreateTempSubdirectory("lanforge-sandbox");
+        try
+        {
+            var root = Path.Combine(sandbox.FullName, "packages");
+            Directory.CreateDirectory(root);
+            var store = new FilePackageContentStore(root);
+            var source = Path.Combine(sandbox.FullName, "src");
+            Directory.CreateDirectory(source);
+            await File.WriteAllTextAsync(Path.Combine(source, "run.exe"), "binario");
+
+            await Assert.ThrowsAsync<ArgumentException>(() => store.ImportArchiveAsync(packageId, source));
+
+            // Ni fuera de la raiz ni dentro: no se escribe ningun .zip.
+            Assert.Empty(Directory.GetFiles(sandbox.FullName, "*.zip"));
+            Assert.Empty(Directory.GetFiles(root, "*.zip"));
+        }
+        finally
+        {
+            sandbox.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(@"..\..\secreto")]
+    [InlineData("../secreto")]
+    [InlineData("..")]
+    [InlineData("")]
+    public async Task FilePackageContentStore_no_abre_fuera_de_su_raiz(string packageId)
+    {
+        var sandbox = Directory.CreateTempSubdirectory("lanforge-sandbox");
+        try
+        {
+            var root = Path.Combine(sandbox.FullName, "packages");
+            Directory.CreateDirectory(root);
+            var store = new FilePackageContentStore(root);
+
+            // Fuera de la raiz hay un zip que NO debe poder leerse.
+            var outside = Path.Combine(sandbox.FullName, "secreto.zip");
+            await File.WriteAllTextAsync(outside, "contenido secreto");
+
+            Assert.Null(await store.OpenArchiveAsync(packageId));
+            Assert.Null(await store.OpenReadAsync(packageId, "run.exe"));
+        }
+        finally
+        {
+            sandbox.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public async Task FilePackageContentStore_borra_el_zip_del_paquete()
     {
@@ -101,6 +160,57 @@ public sealed class FileStorePathTests
             Assert.True(await store.DeleteArchiveAsync("quake3"));
             Assert.False(File.Exists(archive));
             Assert.False(await store.DeleteArchiveAsync("quake3"));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Theory]
+    [InlineData(@"..\escape")]
+    [InlineData("../escape")]
+    [InlineData("sub/carpeta")]
+    [InlineData("con.punto")]
+    public async Task FileCoverStore_no_guarda_fuera_de_su_raiz(string gameId)
+    {
+        var sandbox = Directory.CreateTempSubdirectory("lanforge-sandbox");
+        try
+        {
+            var root = Path.Combine(sandbox.FullName, "covers");
+            Directory.CreateDirectory(root);
+            var store = new FileCoverStore(root);
+            var image = Path.Combine(sandbox.FullName, "origen.png");
+            await File.WriteAllTextAsync(image, "png");
+
+            await Assert.ThrowsAsync<ArgumentException>(() => store.SaveAsync(gameId, image));
+
+            // Ni fuera de la raiz ni dentro: no se guarda ninguna portada con ese identificador.
+            Assert.Empty(Directory.GetFiles(sandbox.FullName, "*.png").Where(f => f != image));
+            Assert.Empty(Directory.GetFiles(root, "*.png"));
+        }
+        finally
+        {
+            sandbox.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task FileCoverStore_guarda_una_portada_que_despues_se_puede_leer()
+    {
+        var root = Directory.CreateTempSubdirectory("lanforge-covers");
+        try
+        {
+            var store = new FileCoverStore(root.FullName);
+            var image = Path.Combine(root.FullName, "origen.PNG");
+            await File.WriteAllTextAsync(image, "png");
+
+            var fileName = await store.SaveAsync("quake3", image);
+
+            // El nombre guardado debe ser el que la lectura acepta (extension en minusculas).
+            Assert.Equal("quake3.png", fileName);
+            Assert.NotNull(await store.OpenReadAsync(fileName));
+            Assert.True(await store.DeleteAsync(fileName));
         }
         finally
         {
