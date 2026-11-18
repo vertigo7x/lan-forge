@@ -61,6 +61,11 @@ public sealed class CatalogService
             throw new InvalidOperationException($"Ya está publicada la versión '{version}' de '{gameId}'.");
         }
 
+        // La fila del juego puede existir aunque todavia no haya paquete (el organizador
+        // guarda la portada y la descripcion antes de publicar). Publicar no puede borrar
+        // esos datos: los hereda y solo fija el titulo.
+        var existingGame = await _store.GetGameAsync(gameId, cancellationToken);
+
         var files = await HashFilesAsync(source, cancellationToken);
         if (files.Count == 0)
         {
@@ -94,9 +99,17 @@ public sealed class CatalogService
             Manifest = manifest,
         };
 
+        // El manifiesto firmado lleva el titulo, asi que la fila del catalogo debe llevar el
+        // mismo: si divergen, el cliente muestra un nombre y el manifiesto otro. Descripcion y
+        // portada se heredan de la fila existente: publicar no borra los datos del organizador
+        // (la edicion de metadatos sigue siendo de AddOrUpdateGameAsync).
+        var game = existingGame is null
+            ? new Game(gameId, title)
+            : existingGame with { Title = title };
+        await _store.UpsertGameAsync(game, cancellationToken);
+
         if (existing is null)
         {
-            await _store.UpsertGameAsync(new Game(gameId, title), cancellationToken);
             await _store.AddPackageAsync(package, cancellationToken);
         }
         else

@@ -164,6 +164,68 @@ public sealed class CatalogServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Publish_ConservaDescripcionYPortadaDelJuego()
+    {
+        var store = new InMemoryCatalogStore();
+        var service = CreateService(store);
+
+        // El organizador guarda la ficha del juego (descripcion y portada) antes de publicar.
+        await service.AddOrUpdateGameAsync("game", "Game", "descripción del juego");
+        var covers = new FileCoverStore(Path.Combine(_temp.Path, "covers"));
+        var image = Path.Combine(_temp.Path, "cover.png");
+        await File.WriteAllBytesAsync(image, [137, 80, 78, 71, 13, 10, 26, 10]);
+        await service.SetCoverAsync("game", image, covers);
+
+        var source = _temp.CreateSourceDirectory(("run.exe", "bin"));
+        await service.PublishPackageAsync("game", "Game", "1.0", source, "run.exe");
+
+        var game = await store.GetGameAsync("game");
+        Assert.NotNull(game);
+        Assert.Equal("descripción del juego", game!.Description);
+        Assert.False(string.IsNullOrWhiteSpace(game.CoverFile));
+
+        // Y el catalogo sigue sirviendo la portada.
+        var entry = Assert.Single(await service.ListCatalogAsync());
+        Assert.Equal(game.CoverFile, entry.CoverPath);
+    }
+
+    [Fact]
+    public async Task Publish_RepublicarActualizaElTituloDelCatalogo()
+    {
+        var store = new InMemoryCatalogStore();
+        var service = CreateService(store);
+
+        var v1 = _temp.CreateSourceDirectory(("a.txt", "v1"));
+        var v2 = _temp.CreateSourceDirectory(("b.txt", "v2"));
+
+        await service.PublishPackageAsync("game", "Titulo Antiguo", "1.0", v1, "a.txt");
+        await service.PublishPackageAsync("game", "Titulo Nuevo", "1.1", v2, "b.txt");
+
+        // El manifiesto firmado y el catalogo deben llamarse igual.
+        var manifest = await service.GetManifestAsync("game");
+        Assert.NotNull(manifest);
+        var entry = Assert.Single(await service.ListCatalogAsync());
+        Assert.Equal(manifest!.GameTitle, entry.Title);
+        Assert.Equal("Titulo Nuevo", entry.Title);
+    }
+
+    [Fact]
+    public async Task Publish_NuevoJuego_CreaLaFilaDelCatalogo()
+    {
+        var store = new InMemoryCatalogStore();
+        var service = CreateService(store);
+        var source = _temp.CreateSourceDirectory(("run.exe", "bin"));
+
+        await service.PublishPackageAsync("game", "Game", "1.0", source, "run.exe");
+
+        var game = await store.GetGameAsync("game");
+        Assert.NotNull(game);
+        Assert.Equal("Game", game!.Title);
+        Assert.Null(game.Description);
+        Assert.Null(game.CoverFile);
+    }
+
+    [Fact]
     public async Task ListCatalog_ReturnsPublishedPackages()
     {
         var service = CreateService();
