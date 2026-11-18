@@ -99,7 +99,7 @@ formulario XAML, hacer doble click en un boton o comprobar que el boton se
 deshabilita durante el envio, la prueba va en `tests/Unit` con la infraestructura
 headless de Avalonia que ya existe en el repo:
 
-- `[Collection("Servidor-UI")]` + `HeadlessServerFixture` para arrancar Avalonia
+- `[Collection("Cliente-UI")]` + `HeadlessServerFixture` para arrancar Avalonia
   en headless y montar el host web del servidor.
 - `HeadlessAvalonia.RunOnUiThread(...)` para ejecutar codigo en el hilo de UI.
 - `HeadlessAvalonia.RunUiJobs()` para vaciar la cola del dispatcher.
@@ -211,3 +211,23 @@ la suite espera un servidor ya listening. Para integrarla:
 2. El `webServer` de la config ya se encarga de levantar y apagar el servidor.
 
 Mientras tanto, la suite corre en local con `npm run e2e`.
+
+## Como se integro con `main`
+
+El flujo de creacion de paquetes se desarrollo en ramas hermanas y se integro
+en `feat/e2e-suite-completa`. Al integrate `origin/main` aparecieron 8
+conflictos, resueltos **uno a uno** (no con "coge el mio"):
+
+| Fichero | Se quedo con | Motivo |
+|---|---|---|
+| `src/Server/Http/ServerWebHost.cs` | la rama | `main` no tiene el registro DI de `IPackageCreationService`; es puramente aditivo |
+| `tests/Unit/TestInfrastructure/HeadlessAvalonia.cs` | la rama | su API es superconjunto de la de `main`: anade `RunUiJobs` y `RunOnUiThreadAndWait`, que necesitan las pruebas e2e de UI |
+| `tests/Unit/Server/HeadlessServerFixture.cs` | la rama | anade `EnsureStarted()`: sin el las vistas no cargan y el arbol visual queda vacio |
+| `tests/Unit/Server/DownloadCompletionReporterTests.cs` | la rama | ademas lleva el orden de `using` correcto; el de `main` reintroduce el error de formato IMPORTS |
+| `tests/Unit/Server/CreatePackageErrorContractTests.cs` | la rama | solo ajuste de saltos de linea |
+| `tests/Integration/CreatePackageEndpointFailureTests.cs` | la rama | solo ajuste de saltos de linea |
+| `tests/Unit/Server/ServerUiTests.cs` | `main` | `main` **corrige** una carrera: quitar el `DrainUiQueue()` previo, porque una maquina rapida podia terminar la publicacion entera y volver a habilitar el boton antes de la comprobacion |
+| `tests/Unit/Server/FileStorePathTests.cs` | `main` | `main` cierra el stream con `await using` antes de borrar el temporal (en Windows un fichero abierto bloquea el borrado) |
+
+Despues del merge se re-ejecutaron todas las suites: build sin errores, Unit
+314/314, Integration 35/35, E2E 1/1 y Playwright 19/19.
