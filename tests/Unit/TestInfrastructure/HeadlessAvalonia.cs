@@ -69,6 +69,13 @@ public static class HeadlessAvalonia
     }
 
     /// <summary>
+    /// Ejecuta una sola vez las tareas pendientes del hilo de UI, sin esperar. Se usa
+    /// cuando el test solo necesita vaciar la cola del dispatcher, no esperar a que
+    /// termine una carga asincrona.
+    /// </summary>
+    public static void RunUiJobs() => Dispatcher.UIThread.RunJobs();
+
+    /// <summary>
     /// Ejecuta la accion en el hilo de UI de Avalonia. Las ventanas solo se pueden
     /// construir en ese hilo: un <see cref="Avalonia.Controls.Window"/> construido desde
     /// otro lanza "the calling thread cannot access this object".

@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:LanForge.Server.ViewModels"
+             x:Class="LanForge.Server.Views.PackageCreateView"
+             x:DataType="vm:PackageCreateViewModel">
+  <ScrollViewer>
+    <StackPanel Margin="12" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="Crear paquete" FontSize="20" FontWeight="Bold"/>
+        <TextBlock Text="Completa los datos del juego portable para publicar un nuevo paquete."
+                   TextWrapping="Wrap"/>
+      </StackPanel>
+
+      <Border BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="8" Padding="16">
+        <StackPanel Spacing="14">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Id del juego *" FontWeight="SemiBold"/>
+            <TextBox x:Name="GameIdBox"
+                     Text="{Binding GameId, Mode=TwoWay}"
+                     MaxLength="64"
+                     PlaceholderText="neon-drift"/>
+            <TextBlock x:Name="GameIdErrorText"
+                       Text="{Binding GameIdError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Título *" FontWeight="SemiBold"/>
+            <TextBox x:Name="TitleBox"
+                     Text="{Binding Title, Mode=TwoWay}"
+                     MaxLength="120"
+                     PlaceholderText="Neon Drift"/>
+            <TextBlock x:Name="TitleErrorText"
+                       Text="{Binding TitleError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Versión *" FontWeight="SemiBold"/>
+            <TextBox x:Name="VersionBox"
+                     Text="{Binding Version, Mode=TwoWay}"
+                     MaxLength="64"
+                     PlaceholderText="1.0.0"/>
+            <TextBlock x:Name="VersionErrorText"
+                       Text="{Binding VersionError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Carpeta origen *" FontWeight="SemiBold"/>
+            <TextBox x:Name="SourceDirectoryBox"
+                     Text="{Binding SourceDirectory, Mode=TwoWay}"
+                     MaxLength="4096"
+                     PlaceholderText="C:\Juegos\neon-drift"/>
+            <TextBlock x:Name="SourceDirectoryErrorText"
+                       Text="{Binding SourceDirectoryError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Ejecutable *" FontWeight="SemiBold"/>
+            <TextBox x:Name="EntryPointBox"
+                     Text="{Binding EntryPoint, Mode=TwoWay}"
+                     PlaceholderText="game.exe"/>
+            <TextBlock x:Name="EntryPointErrorText"
+                       Text="{Binding EntryPointError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Argumentos de arranque (opcional)" FontWeight="SemiBold"/>
+            <TextBox x:Name="ArgumentsBox"
+                     Text="{Binding Arguments, Mode=TwoWay}"
+                     MaxLength="1024"
+                     PlaceholderText="--fullscreen"/>
+            <TextBlock x:Name="ArgumentsErrorText"
+                       Text="{Binding ArgumentsError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <TextBlock Text="{Binding StatusMessage}"
+                 TextWrapping="Wrap"/>
+
+      <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+        <Button x:Name="ResetButton"
+                Content="Restablecer"
+                Command="{Binding ResetCommand}"/>
+        <Button x:Name="PublishButton"
+                Content="Crear paquete"
+                Command="{Binding SubmitCommand}"
+                IsEnabled="{Binding CanSubmit}"/>
+      </StackPanel>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
