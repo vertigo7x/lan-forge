@@ -30,6 +30,9 @@ public partial class MainWindow : Window
 
     private readonly ClientOptions _options = ClientOptions.Default();
     private readonly ObservableCollection<GameCardItem> _cards = [];
+    private readonly ObservableCollection<SteamGameItem> _steamGames = [];
+    private readonly SteamLibraryScanner _steamScanner;
+    private readonly GameLauncher _steamLauncher = new(new SystemProcessStarter());
     private ClientSession? _session;
     private IChatService? _chat;
     private string _currentChannel = LanForge.Shared.Chat.ChatHubContract.GeneralChannel;
@@ -49,6 +52,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         GamesGrid.ItemsSource = _cards;
+        SteamList.ItemsSource = _steamGames;
+        _steamScanner = new SteamLibraryScanner(new JsonlClientLog(_options.DataDirectory));
+        _ = RefreshSteamAsync();
 
         _ = LoadSettingsAsync();
 
@@ -177,6 +183,7 @@ public partial class MainWindow : Window
         DownloadsView.IsVisible = button == NavDownloads;
         SettingsView.IsVisible = button == NavSettings;
         ChatView.IsVisible = button == NavChat;
+        SteamView.IsVisible = button == NavSteam;
         if (button == NavDownloads)
         {
             _ = RefreshOperationsAsync();
@@ -184,6 +191,10 @@ public partial class MainWindow : Window
         else if (button == NavChat)
         {
             _ = RefreshChatAsync();
+        }
+        else if (button == NavSteam)
+        {
+            _ = RefreshSteamAsync();
         }
     }
 
@@ -735,6 +746,66 @@ public partial class MainWindow : Window
         {
             chip.Classes.Remove("active");
         }
+    }
+
+    // ---------- Steam (juegos instalados locales) ----------
+
+    private async void OnRefreshSteam(object? sender, Avalonia.Interactivity.RoutedEventArgs e) =>
+        await RefreshSteamAsync();
+
+    /// <summary>
+    /// Relee las bibliotecas de Steam sin reiniciar el cliente: detecta juegos
+    /// instalados o desinstalados desde el último escaneo.
+    /// </summary>
+    private async Task RefreshSteamAsync()
+    {
+        try
+        {
+            RefreshSteamButton.IsEnabled = false;
+            SteamSubtitle.Text = "Buscando juegos de Steam…";
+            var games = await Task.Run(() => _steamScanner.ScanAsync());
+            _steamGames.Clear();
+            foreach (var game in games)
+            {
+                _steamGames.Add(new SteamGameItem(game, PlaySteamGameAsync));
+            }
+
+            SteamEmptyText.IsVisible = games.Count == 0;
+            if (games.Count == 0)
+            {
+                SteamSubtitle.Text = "Steam no detectado en este equipo.";
+                SteamEmptyText.Text = "No se encontró ninguna instalación de Steam o no hay juegos instalados.";
+            }
+            else
+            {
+                SteamSubtitle.Text = $"{games.Count} juego(s) instalado(s) en tus bibliotecas de Steam";
+            }
+        }
+        catch (Exception ex)
+        {
+            // Steam es una fuente opcional: un fallo de lectura no rompe el cliente.
+            SteamSubtitle.Text = "No se pudo leer la biblioteca de Steam.";
+            SteamEmptyText.IsVisible = true;
+            SteamEmptyText.Text = ex.Message;
+        }
+        finally
+        {
+            RefreshSteamButton.IsEnabled = true;
+        }
+    }
+
+    private Task PlaySteamGameAsync(SteamGameItem item)
+    {
+        try
+        {
+            _steamLauncher.Launch(item.Game);
+        }
+        catch (Exception ex)
+        {
+            StatusText.Text = $"Error al lanzar: {ex.Message}";
+        }
+
+        return Task.CompletedTask;
     }
 
     // ---------- Acciones de juegos ----------

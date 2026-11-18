@@ -50,6 +50,12 @@
               <Run Text="   Catálogo"/>
             </TextBlock>
           </Button>
+          <Button x:Name="NavSteam" Theme="{StaticResource NavItem}" Click="OnNavClick">
+            <TextBlock VerticalAlignment="Center">
+              <Run Text="&#xf04b;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
+              <Run Text="   Steam"/>
+            </TextBlock>
+          </Button>
           <Button x:Name="NavChat" Theme="{StaticResource NavItem}" Click="OnNavClick">
             <TextBlock VerticalAlignment="Center">
               <Run Text="&#xf0c0;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
@@ -188,6 +194,38 @@
         <StackPanel Spacing="16" Margin="28,24">
           <TextBlock Text="Descargas y operaciones" Theme="{StaticResource T.H1}"/>
           <ListBox x:Name="OperationsList" Background="Transparent"/>
+        </StackPanel>
+      </ScrollViewer>
+
+      <!-- STEAM: juegos instalados detectados en las bibliotecas locales -->
+      <ScrollViewer x:Name="SteamView" IsVisible="False">
+        <StackPanel Spacing="16" Margin="28,24">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Grid.Column="0" Spacing="4">
+              <TextBlock Text="Juegos de Steam" Theme="{StaticResource T.H1}"/>
+              <TextBlock x:Name="SteamSubtitle" Theme="{StaticResource T.Body}"/>
+            </StackPanel>
+            <Button Grid.Column="1" x:Name="RefreshSteamButton" Theme="{StaticResource ButtonSecondary}"
+                    Content="Actualizar" Click="OnRefreshSteam" VerticalAlignment="Center"/>
+          </Grid>
+          <TextBlock x:Name="SteamEmptyText" Theme="{StaticResource T.Body}" IsVisible="False"/>
+          <ItemsControl x:Name="SteamList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="vm:SteamGameItem">
+                <Border Theme="{StaticResource Card}" Padding="12,10" Margin="0,0,0,8">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="2">
+                      <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold"
+                                 Foreground="{StaticResource TextPrimaryBrush}"/>
+                      <TextBlock Text="{Binding Detail}" Theme="{StaticResource T.Caption}"/>
+                    </StackPanel>
+                    <Button Grid.Column="1" Theme="{StaticResource ButtonPrimary}" Content="Jugar"
+                            Command="{Binding PlayCommand}" VerticalAlignment="Center"/>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </StackPanel>
       </ScrollViewer>
 
