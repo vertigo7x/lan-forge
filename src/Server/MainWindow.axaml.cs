@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using LanForge.Server.Application;
+using LanForge.Server.Domain;
 using LanForge.Server.ViewModels;
 using LanForge.Shared.Models;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,6 +14,12 @@ namespace LanForge.Server;
 public partial class MainWindow : Window
 {
     private readonly DispatcherTimer _refreshTimer;
+
+    /// <summary>
+    /// Filas del catalogo que ya existen, por id de juego. Se reutilizan en cada refresco
+    /// para que la confirmacion de borrado sobreviva al refresco periodico.
+    /// </summary>
+    private readonly CatalogRowCache _catalogRows = new();
 
     public MainWindow()
     {
@@ -158,6 +165,13 @@ public partial class MainWindow : Window
         try
         {
             var deleted = await catalog.DeleteGameAsync(gameId, services.GetRequiredService<ICoverStore>());
+            if (deleted)
+            {
+                // La fila se descarta ya: si el juego volviera a publicarse, debe
+                // aparecer con su confirmacion en estado normal.
+                _catalogRows.Remove(gameId);
+            }
+
             StatusText.Text = deleted
                 ? $"Juego eliminado del catalogo: {gameId}."
                 : $"No habia ningun juego con el id '{gameId}'.";
@@ -168,6 +182,16 @@ public partial class MainWindow : Window
             StatusText.Text = $"Error al borrar '{gameId}': {ex.Message}";
         }
     }
+
+    /// <summary>
+    /// Reconstruye el listado del catalogo reutilizando las filas que ya existen. Antes se
+    /// creaban filas nuevas en cada refresco (cada 2 segundos), y como el boton de borrar
+    /// guarda su confirmacion en la propia fila, el organizador tenia que pulsar dos veces
+    /// en menos de 2 segundos o el borrado nunca se ejecutaba. Al reutilizar la fila, la
+    /// confirmacion sobrevive al refresco.
+    /// </summary>
+    private CatalogRow[] BuildCatalogRows(IReadOnlyList<Package> packages, IReadOnlyList<Game> games) =>
+        _catalogRows.Build(packages, games);
 
     private async Task RefreshAsync()
     {
@@ -180,13 +204,7 @@ public partial class MainWindow : Window
         var store = services.GetRequiredService<ICatalogStore>();
         var packages = await store.ListLatestPackagesAsync();
         var games = await store.ListGamesAsync();
-        CatalogList.ItemsSource = packages
-            .Select(p =>
-            {
-                var title = games.FirstOrDefault(g => g.Id == p.GameId)?.Title ?? p.GameId;
-                return new CatalogRow(p.GameId, title, p.Version, p.FileCount, p.TotalSizeBytes);
-            })
-            .ToArray();
+        CatalogList.ItemsSource = BuildCatalogRows(packages, games);
 
         var clients = await store.ListSeenClientsAsync();
         ClientsList.ItemsSource = clients
