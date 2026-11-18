@@ -139,7 +139,7 @@ llegue a ejecutarse.
 | H-C | `identity.json` corrupto (corte de luz al escribir) produce `ArgumentException: La clave privada debe tener 32 bytes`, sin indicar el fichero. | El mensaje es poco útil pero el fallo es ruidoso y el usuario puede resolverlo borrando el fichero. |
 | H-D | `GetLocalIpAddress` devuelve la primera IPv4 del host, que en equipos con adaptadores virtuales (Hyper-V, VPN, Docker) puede no ser la IP de la LAN. | Afecta a la IP que se muestra al organizador; un criterio de selección mejor exige decidir qué es "la IP de la LAN" (heurística, tema de producto). |
 | H-E | `ChatHub.OnDisconnectedAsync` no difunde la lista de miembros tras la desconexión (solo la de canales). | Cosmético: la lista de miembros se recalcula al siguiente `Join`/`Leave`. |
-| H-F | `Program.Main` no detiene el host web al cerrar la ventana. | Cosmético para el usuario, pero afecta al cierre ordenado de la conexión SQLite: se corrige en esta rama. |
+| H-F | `Program.Main` no detiene el host web al cerrar la ventana. | Cosmético para el usuario, pero afecta al cierre ordenado de la conexión SQLite. **Queda pendiente**: no se ha corregido en esta rama. |
 
 ---
 
