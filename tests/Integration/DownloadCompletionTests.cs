@@ -30,12 +30,15 @@ namespace LanForge.IntegrationTests;
 public sealed class DownloadCompletionTests : IDisposable
 {
     /// <summary>
-    /// Tamano del paquete de la prueba de corte. Tiene que ser mayor que todo lo que el
-    /// servidor y el sistema pueden acumular en memoria intermedia (el pipe de Kestrel y
-    /// el buffer del socket) para que el servidor se quede bloqueado escribiendo y no
-    /// pueda terminar la transferencia antes de que el cliente corte.
+    /// Tamano del paquete de la prueba de corte. Tiene que ser mayor, con mucho margen,
+    /// que todo lo que el servidor y el sistema pueden acumular en memoria intermedia
+    /// (el pipe de Kestrel y los buffers del socket en los dos extremos) para que el
+    /// servidor se quede bloqueado escribiendo y no pueda terminar la transferencia antes
+    /// de que el cliente corte. En el CI de Windows el loopback llego a absorber los 32 MB
+    /// de antes enteros (el servidor escribio todo sin bloquearse y la descarga se registro
+    /// como Completed), asi que el margen tiene que ser de varias veces esa cifra.
     /// </summary>
-    private const int LargePayloadBytes = 32 * 1024 * 1024;
+    private const int LargePayloadBytes = 256 * 1024 * 1024;
 
     private readonly TempDirectory _temp = new();
 
@@ -358,17 +361,27 @@ public sealed class DownloadCompletionTests : IDisposable
     /// eso pasa, la cuenta de bytes del servidor va por la mitad: exactamente la situacion
     /// de una descarga a medias, que es la que se quiere cortar.
     ///
-    /// No basta con "algunos bytes pero no todos": entre que la prueba observa ese estado
-    /// y el corte llega al servidor, el servidor podria seguir escribiendo en los buffers
-    /// del sistema (en el loopback de Windows caben decenas de MB) y terminar la
-    /// transferencia. La cuenta inmovil demuestra que el servidor esta bloqueado en una
-    /// escritura que no puede avanzar: al cortar la conexion esa escritura falla y los
-    /// bytes que faltan no se escriben jamas.
+    /// Una cuenta que deja de moverse significa DOS cosas distintas: que la escritura esta
+    /// bloqueada porque los buffers estan llenos (lo que se quiere), o que la transferencia
+    /// ha terminado (tambien deja de moverse). Por eso la condicion es
+    /// 0 &lt; escritos &lt; esperados: si la cuenta llega a igualar a lo declarado, la
+    /// transferencia ya se completo y no hay nada que cortar — cortar ahi registraria la
+    /// descarga como Completed, que es justo el fallo que esta prueba persigue.
+    ///
+    /// Tampoco basta con "algunos bytes pero no todos": entre que la prueba observa ese
+    /// estado y el corte llega al servidor, el servidor podria seguir escribiendo en los
+    /// buffers del sistema y terminar. Por eso la cuenta tiene que estar quieta durante un
+    /// intervalo. Y para que una pausa espuria (planificacion, GC) no se confunda con un
+    /// bloqueo real, el paquete es mucho mayor que todo lo que los buffers pueden acumular:
+    /// mientras el cliente no lea, el servidor no puede haber escrito mas de lo que cabe en
+    /// esos buffers, asi que siempre quedan mas bytes pendientes que hueco para escribirlos
+    /// y la transferencia no puede completarse antes del corte.
     ///
     /// Aqui no hay ningun plazo de tiempo: se espera a la condicion, que es la que hace
-    /// determinista la prueba. Si el paquete fuera tan pequeno que la transferencia
-    /// terminara antes de que el cliente dejara de leer, la espera no se cumpliria y la
-    /// prueba lo diria con un mensaje claro, en vez de fallar por el motivo equivocado.
+    /// determinista la prueba. Si el paquete cupiera entero en los buffers, la transferencia
+    /// terminaria antes de que el cliente dejara de leer y la espera lo detecta en cuanto la
+    /// cuenta alcanza lo declarado, con un mensaje claro, en vez de fallar por el motivo
+    /// equivocado.
     /// </remarks>
     private static async Task WaitUntilTransferIsBlockedAsync(Task<HttpContext> contextTask)
     {
@@ -382,15 +395,32 @@ public sealed class DownloadCompletionTests : IDisposable
             {
                 written = tracker.WrittenBytes;
                 declared = tracker.DeclaredBytes;
-                if (declared is { } total && written > 0 && written < total)
+                if (declared is { } total)
                 {
-                    // La cuenta no se mueve: el servidor esta bloqueado escribiendo
-                    // (los buffers estan llenos y nadie lee). Si estuviera copiando,
-                    // la cuenta subiria.
-                    await Task.Delay(100);
-                    if (tracker.WrittenBytes == written)
+                    if (written >= total)
                     {
-                        return;
+                        // La cuenta llego a igualar a lo declarado: la transferencia ya se
+                        // completo y no hay nada que cortar. Cortar ahora solo diria que la
+                        // descarga se completo, que es el fallo que esta prueba persigue: el
+                        // paquete cabia entero en los buffers y el corte llego tarde.
+                        throw new Xunit.Sdk.XunitException(
+                            $"La transferencia termino antes de que la prueba pudiera cortarla: " +
+                            $"el servidor escribio los {written} de {total} bytes sin bloquearse. " +
+                            "El paquete tiene que ser mayor que lo que cabe en los buffers para " +
+                            "que el servidor se quede bloqueado escribiendo: si no, la prueba no " +
+                            "es determinista.");
+                    }
+
+                    if (written > 0)
+                    {
+                        // La cuenta no se mueve: el servidor esta bloqueado escribiendo
+                        // (los buffers estan llenos y nadie lee). Si estuviera copiando,
+                        // la cuenta subiria.
+                        await Task.Delay(100);
+                        if (tracker.WrittenBytes == written)
+                        {
+                            return;
+                        }
                     }
                 }
             }
