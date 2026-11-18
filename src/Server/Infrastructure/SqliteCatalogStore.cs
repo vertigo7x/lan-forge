@@ -231,11 +231,23 @@ public sealed class SqliteCatalogStore : ICatalogStore, IDisposable
         }
     }
 
-    public async Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Operaciones registradas, de la mas reciente a la mas antigua. La lectura viene
+    /// acotada: la tabla <c>operations</c> recibe una fila por cada sincronizacion y cada
+    /// descarga, y la UI solo necesita las ultimas.
+    /// </summary>
+    public async Task<IReadOnlyList<ServerOperation>> ListOperationsAsync(
+        int limit = ICatalogStore.DefaultOperationsLimit, CancellationToken cancellationToken = default)
     {
         var operations = new List<ServerOperation>();
         await using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT operation_id, client_id, type, status, started_utc, finished_utc, detail FROM operations ORDER BY started_utc;";
+        command.CommandText = """
+            SELECT operation_id, client_id, type, status, started_utc, finished_utc, detail
+            FROM operations
+            ORDER BY started_utc DESC
+            LIMIT $limit;
+            """;
+        command.Parameters.AddWithValue("$limit", Math.Max(0, limit));
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
@@ -250,6 +262,28 @@ public sealed class SqliteCatalogStore : ICatalogStore, IDisposable
         }
 
         return operations;
+    }
+
+    /// <summary>
+    /// Poda las operaciones iniciadas antes de <paramref name="olderThan"/>. La tabla
+    /// <c>operations</c> no tiene tope por si misma, asi que sin esta poda seguiria
+    /// creciendo durante toda la vida del servidor.
+    /// </summary>
+    public async Task<int> PruneOperationsAsync(
+        DateTimeOffset olderThan, CancellationToken cancellationToken = default)
+    {
+        await _writeLock.WaitAsync(cancellationToken);
+        try
+        {
+            await using var command = _connection.CreateCommand();
+            command.CommandText = "DELETE FROM operations WHERE started_utc < $cutoff;";
+            command.Parameters.AddWithValue("$cutoff", FormatDate(olderThan));
+            return await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        finally
+        {
+            _writeLock.Release();
+        }
     }
 
     public void Dispose() => _connection.Dispose();
@@ -349,6 +383,7 @@ public sealed class SqliteCatalogStore : ICatalogStore, IDisposable
                 last_seen_utc  TEXT NOT NULL,
                 ip_address     TEXT NULL
             );
+            CREATE INDEX IF NOT EXISTS ix_operations_started_utc ON operations (started_utc DESC);
             """;
         command.ExecuteNonQuery();
 

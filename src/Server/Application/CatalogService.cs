@@ -9,17 +9,29 @@ namespace LanForge.Server.Application;
 /// <summary>Casos de uso del catálogo: juegos, publicación de paquetes firmados y consultas de descarga.</summary>
 public sealed class CatalogService
 {
+    /// <summary>
+    /// Antiguedad maxima que se conserva en la tabla de operaciones. Cada sincronizacion
+    /// de catalogo y cada descarga inserta una fila, asi que sin esta poda la tabla
+    /// creceria durante toda la vida del servidor.
+    /// </summary>
+    public static readonly TimeSpan OperationRetention = TimeSpan.FromDays(7);
+
     private readonly ICatalogStore _store;
     private readonly IPackageContentStore _content;
     private readonly IServerIdentity _identity;
     private readonly IServerLog? _log;
+    private readonly TimeProvider _timeProvider;
+    private DateTimeOffset _lastPruneUtc = DateTimeOffset.MinValue;
 
-    public CatalogService(ICatalogStore store, IPackageContentStore content, IServerIdentity identity, IServerLog? log = null)
+    public CatalogService(
+        ICatalogStore store, IPackageContentStore content, IServerIdentity identity,
+        IServerLog? log = null, TimeProvider? timeProvider = null)
     {
         _store = store;
         _content = content;
         _identity = identity;
         _log = log;
+        _timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public async Task<Game> AddOrUpdateGameAsync(
@@ -257,10 +269,35 @@ public sealed class CatalogService
         return stream is null ? null : new PackageFileStream(stream, entry);
     }
 
-    /// <summary>Registra una operación en el store (vista "operaciones" de la UI).</summary>
+    /// <summary>
+    /// Registra una operación en el store (vista "operaciones" de la UI). De paso poda
+    /// las operaciones mas antiguas que la ventana de retencion, pero no en cada
+    /// registro: como mucho una vez por minuto, para no pagar un DELETE por descarga.
+    /// </summary>
     public async Task RecordOperationAsync(ServerOperation operation, CancellationToken cancellationToken = default)
     {
         await _store.RecordOperationAsync(operation, cancellationToken);
+        await PruneOperationsIfDueAsync(cancellationToken);
+    }
+
+    /// <summary>Poda las operaciones que han superado la ventana de retencion, si toca poda.</summary>
+    private async Task PruneOperationsIfDueAsync(CancellationToken cancellationToken)
+    {
+        var now = _timeProvider.GetUtcNow();
+        if (now - _lastPruneUtc < TimeSpan.FromMinutes(1))
+        {
+            return;
+        }
+
+        _lastPruneUtc = now;
+        var pruned = await _store.PruneOperationsAsync(now - OperationRetention, cancellationToken);
+        if (pruned > 0)
+        {
+            await WriteLogAsync(
+                null, "operations.pruned", LogSeverity.Debug,
+                $"Poda de operaciones: {pruned} fila(s) mas antiguas de {OperationRetention.TotalDays:0} dia(s)",
+                cancellationToken);
+        }
     }
 
     private async Task WriteLogAsync(

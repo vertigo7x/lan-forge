@@ -1,4 +1,5 @@
 using LanForge.Server.Application;
+using LanForge.Server.Domain;
 using LanForge.Server.Infrastructure;
 using LanForge.Shared.Manifest;
 using LanForge.Shared.Security;
@@ -12,12 +13,12 @@ public sealed class CatalogServiceTests : IDisposable
 
     public void Dispose() => _temp.Dispose();
 
-    private CatalogService CreateService(ICatalogStore? store = null)
+    private CatalogService CreateService(ICatalogStore? store = null, TimeProvider? timeProvider = null)
     {
         store ??= new InMemoryCatalogStore();
         var content = new FilePackageContentStore(Path.Combine(_temp.Path, "packages"));
         var identity = new FileServerIdentityStore(Path.Combine(_temp.Path, "identity"));
-        return new CatalogService(store, content, identity);
+        return new CatalogService(store, content, identity, timeProvider: timeProvider);
     }
 
     [Fact]
@@ -265,6 +266,39 @@ public sealed class CatalogServiceTests : IDisposable
         Assert.Equal(1, store.ListGamesCalls);
         Assert.Equal(0, store.GetGameCalls);
     }
+
+    [Fact]
+    public async Task RecordOperation_PodaLasOperacionesMasAntiguasQueLaRetencion()
+    {
+        // La tabla de operaciones recibe una fila por cada sincronizacion y descarga.
+        // Sin poda, creceria durante toda la vida del servidor.
+        var store = new InMemoryCatalogStore();
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero));
+        var service = CreateService(store, timeProvider: clock);
+
+        await service.RecordOperationAsync(NewOperation("vieja", clock.GetUtcNow().AddDays(-30)));
+        await service.RecordOperationAsync(NewOperation("reciente", clock.GetUtcNow().AddDays(-1)));
+
+        var remaining = await store.ListOperationsAsync();
+        var loaded = Assert.Single(remaining);
+        Assert.Equal("reciente", loaded.OperationId);
+    }
+
+    [Fact]
+    public async Task RecordOperation_NoPodaLoQueEstaDentroDeLaRetencion()
+    {
+        var store = new InMemoryCatalogStore();
+        var clock = new FakeTimeProvider(new DateTimeOffset(2026, 11, 16, 12, 0, 0, TimeSpan.Zero));
+        var service = CreateService(store, timeProvider: clock);
+
+        await service.RecordOperationAsync(NewOperation("a", clock.GetUtcNow().AddDays(-6)));
+        await service.RecordOperationAsync(NewOperation("b", clock.GetUtcNow()));
+
+        Assert.Equal(2, (await store.ListOperationsAsync()).Count);
+    }
+
+    private static ServerOperation NewOperation(string id, DateTimeOffset startedUtc) => new(
+        id, "client-1", "catalog.sync", OperationStatus.Completed, startedUtc, startedUtc, null);
 
     [Fact]
     public async Task SetCover_CatalogServesCoverAndRejectsTraversal()

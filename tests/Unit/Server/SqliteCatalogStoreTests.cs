@@ -137,4 +137,107 @@ public sealed class SqliteCatalogStoreTests : IDisposable
         Assert.Equal("quake3", loaded.Detail);
         Assert.Equal(started.AddSeconds(3), loaded.FinishedUtc);
     }
+
+    [Fact]
+    public async Task ListOperations_DevuelveLasMasRecientesYAcotadas()
+    {
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+
+        // 250 operaciones: la tabla recibe una fila por cada sincronizacion y descarga.
+        for (var i = 0; i < 250; i++)
+        {
+            await store.RecordOperationAsync(new ServerOperation(
+                $"op-{i:D3}", "client-1", "catalog.sync",
+                OperationStatus.Completed, baseTime.AddSeconds(i), baseTime.AddSeconds(i), $"n={i}"));
+        }
+
+        var limited = await store.ListOperationsAsync(100);
+
+        Assert.Equal(100, limited.Count);
+        // De la mas reciente a la mas antigua.
+        Assert.Equal("op-249", limited[0].OperationId);
+        Assert.Equal("op-150", limited[^1].OperationId);
+    }
+
+    [Fact]
+    public async Task ListOperations_ElLimiteAcotaLoQueVuelve()
+    {
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 10; i++)
+        {
+            await store.RecordOperationAsync(new ServerOperation(
+                $"op-{i}", "client-1", "catalog.sync",
+                OperationStatus.Completed, baseTime.AddSeconds(i), baseTime.AddSeconds(i), null));
+        }
+
+        Assert.Equal(3, (await store.ListOperationsAsync(3)).Count);
+        Assert.Equal(10, (await store.ListOperationsAsync()).Count);
+    }
+
+    [Fact]
+    public async Task PruneOperations_BorraLasAntiguasYConservaLasRecientes()
+    {
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+        await store.RecordOperationAsync(new ServerOperation(
+            "old", "client-1", "catalog.sync", OperationStatus.Completed, baseTime, baseTime, null));
+        await store.RecordOperationAsync(new ServerOperation(
+            "new", "client-1", "catalog.sync", OperationStatus.Completed, baseTime.AddHours(1), baseTime.AddHours(1), null));
+
+        var pruned = await store.PruneOperationsAsync(baseTime.AddMinutes(30));
+
+        Assert.Equal(1, pruned);
+        var remaining = Assert.Single(await store.ListOperationsAsync());
+        Assert.Equal("new", remaining.OperationId);
+    }
+
+    [Fact]
+    public async Task PruneOperations_NoBorraNadaSiNoHayAntiguas()
+    {
+        using var store = CreateStore();
+        var baseTime = new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero);
+        await store.RecordOperationAsync(new ServerOperation(
+            "op-1", "client-1", "catalog.sync", OperationStatus.Completed, baseTime, baseTime, null));
+
+        Assert.Equal(0, await store.PruneOperationsAsync(baseTime.AddHours(-1)));
+        Assert.Single(await store.ListOperationsAsync());
+    }
+
+    [Fact]
+    public async Task Operations_TienenIndicePorFechaDeInicio()
+    {
+        // Sin indice por started_utc, la lectura acotada y la poda tienen que ordenar
+        // toda la tabla en cada consulta.
+        var databasePath = Path.Combine(_temp.Path, $"index-{Guid.NewGuid():n}.db");
+        using (var store = new SqliteCatalogStore(databasePath))
+        {
+            await store.RecordOperationAsync(new ServerOperation(
+                "op-1", "client-1", "catalog.sync", OperationStatus.Completed,
+                new DateTimeOffset(2026, 11, 16, 10, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 11, 16, 10, 0, 1, TimeSpan.Zero), null));
+        }
+
+        var indexes = new List<string>();
+        var connection = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = databasePath }.ToString());
+        connection.Open();
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'operations';";
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                indexes.Add(reader.GetString(0));
+            }
+        }
+        finally
+        {
+            connection.Dispose();
+        }
+
+        Assert.Contains("ix_operations_started_utc", indexes);
+    }
 }

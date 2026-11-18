@@ -174,9 +174,11 @@ public partial class MainWindow : Window
             .Select(c => $"{c.Name}  —  {c.Members} miembro(s)")
             .ToArray();
 
-        var operations = await store.ListOperationsAsync();
+        // La lectura viene acotada por el store (las mas recientes primero) y el listado
+        // de la UI no necesita mas de 100: antes se cargaba la tabla entera en memoria
+        // cada 2 segundos solo para quedarse con las 100 ultimas.
+        var operations = await store.ListOperationsAsync(100);
         OperationsList.ItemsSource = operations
-            .TakeLast(100)
             .Select(o => $"{o.StartedUtc.LocalDateTime:g}  [{o.Status}]  {o.Type}  {o.Detail ?? string.Empty}  ({o.ClientId})")
             .ToArray();
     }
