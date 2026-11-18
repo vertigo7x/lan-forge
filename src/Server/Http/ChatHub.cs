@@ -48,8 +48,10 @@ public sealed class ChatHub : Hub
             return;
         }
 
-        // Solo miembros del canal pueden hablar en él.
-        if (!_rooms.Members(channel).Contains(UserName(), StringComparer.Ordinal))
+        // Solo las conexiones que entraron en el canal pueden hablar en el. La pertenencia se
+        // comprueba por connectionId: si se comprobara por nombre, cualquiera que se llamara
+        // igual que un miembro podria escribir en el canal sin estar dentro.
+        if (!_rooms.IsMember(Context.ConnectionId, channel))
         {
             return;
         }

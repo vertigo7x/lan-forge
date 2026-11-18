@@ -1,6 +1,9 @@
+using System.Text.Json;
 using LanForge.Server.Application;
 using LanForge.Server.Domain;
+using LanForge.Shared;
 using LanForge.Shared.Logging;
+using LanForge.Shared.Models;
 using LanForge.Shared.Protocol;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -12,6 +15,9 @@ public static class ApiEndpoints
 {
     public const string ClientIdHeader = "X-LanForge-Client-Id";
     public const string OperationIdHeader = "X-LanForge-Operation-Id";
+
+    /// <summary>Clave en HttpContext.Items donde se cachea el identificador de operacion resuelto.</summary>
+    private const string OperationIdItemKey = "LanForge.OperationId";
 
     public static void MapLanForgeApi(this WebApplication app)
     {
@@ -85,7 +91,95 @@ public static class ApiEndpoints
             }
         });
 
-        api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapPost("/packages", async (HttpContext context, CatalogService catalog, CreatePackageUseCase createPackage, IServerLog log, CancellationToken cancellationToken) =>
+        {
+            var started = DateTimeOffset.UtcNow;
+            var operationId = GetOrCreateOperationId(context);
+            var clientId = GetClientId(context) ?? "organizer";
+
+            CreatePackageRequest? request;
+            try
+            {
+                request = await context.Request.ReadFromJsonAsync<CreatePackageRequest>(SharedJson.Options, cancellationToken);
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "malformed_body", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("malformed_body", "El cuerpo de la solicitud no es un JSON válido.", []),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+
+            try
+            {
+                var created = await createPackage.CreateAsync(request, cancellationToken);
+
+                await catalog.RecordOperationAsync(new ServerOperation(
+                    operationId, clientId, "catalog.publish", OperationStatus.Completed, started, DateTimeOffset.UtcNow,
+                    $"{created.GameId} v{created.Version}"), cancellationToken);
+                await LogAsync(log, context, "package.created", LogSeverity.Info, $"Paquete publicado: {created.GameId} v{created.Version} ({created.FileCount} archivos)");
+                return Results.Json(created, SharedJson.Options, statusCode: StatusCodes.Status201Created);
+            }
+            catch (PackageValidationException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "validation_failed", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("validation_failed", ex.Message, ex.Errors),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (PackageVersionConflictException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "version_conflict", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("version_conflict", ex.Message, []),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+            catch (EmptySourceDirectoryException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "empty_directory", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("empty_directory", ex.Message, [new ApiFieldError("sourceDirectory", "empty_directory", ex.Message)]),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (PackageSourceNotFoundException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "not_found", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("not_found", ex.Message, [new ApiFieldError("sourceDirectory", "not_found", ex.Message)]),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (PackageEntryPointNotFoundException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "invalid_argument", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("invalid_argument", ex.Message, [new ApiFieldError(ex.Field, "not_found", ex.Message)]),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (InvalidOperationException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "conflict", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("conflict", ex.Message, []),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status409Conflict);
+            }
+            catch (ArgumentException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "invalid_argument", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("invalid_argument", ex.Message, [new ApiFieldError(FieldForArgument(ex), "invalid_format", ex.Message)]),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+        });
+
+        api.MapGet("/download/{packageId}", async (string packageId, HttpContext context, CatalogService catalog, IServerLog log, ICatalogStore store, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);
             var clientId = GetClientId(context) ?? "anonymous";
@@ -104,20 +198,14 @@ public static class ApiEndpoints
             await catalog.RecordOperationAsync(new ServerOperation(
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
+            var reporter = new DownloadCompletionReporter(store, log);
             var completion = new NotifyStream(archive.Stream, () =>
-            {
-                _ = Task.Run(async () =>
-                {
-                    await catalog.RecordOperationAsync(new ServerOperation(
-                        operationId, clientId, "package.download", OperationStatus.Completed, started, DateTimeOffset.UtcNow, detail));
-                    await log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, LogSeverity.Info, "download.completed", detail));
-                });
-            });
+                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
 
             return Results.Stream(completion, contentType: "application/zip", fileDownloadName: $"{packageId}.zip", enableRangeProcessing: true);
         });
 
-        api.MapGet("/download/{packageId}/{**path}", async (string packageId, string path, HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapGet("/download/{packageId}/{**path}", async (string packageId, string path, HttpContext context, CatalogService catalog, IServerLog log, ICatalogStore store, CancellationToken cancellationToken) =>
         {
             var operationId = GetOrCreateOperationId(context);
             var clientId = GetClientId(context) ?? "anonymous";
@@ -135,45 +223,96 @@ public static class ApiEndpoints
             await catalog.RecordOperationAsync(new ServerOperation(
                 operationId, clientId, "package.download", OperationStatus.Started, started, null, detail), CancellationToken.None);
 
+            var reporter = new DownloadCompletionReporter(store, log);
             var completion = new NotifyStream(file.Stream, () =>
-            {
-                // Al cerrarse el stream (completado o cancelado) se finaliza la operación.
-                _ = Task.Run(async () =>
-                {
-                    await catalog.RecordOperationAsync(new ServerOperation(
-                        operationId, clientId, "package.download", OperationStatus.Completed, started, DateTimeOffset.UtcNow, detail));
-                    await log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, LogSeverity.Info, "download.completed", detail));
-                });
-            });
+                reporter.Report(operationId, clientId, detail, started, IsAborted(context)));
 
             return Results.Stream(completion, contentType: "application/octet-stream", fileDownloadName: Path.GetFileName(file.Entry.Path), enableRangeProcessing: true);
         });
     }
+
+    /// <summary>
+    /// Indica si el cliente corto la transferencia. Kestrel cancela el token de la peticion
+    /// cuando el cliente abandona la conexion, y el token ya esta cancelado cuando el stream
+    /// se cierra. Una descarga terminada a fondo (con su Range) no lo tiene cancelado.
+    /// </summary>
+    private static bool IsAborted(HttpContext context) =>
+        context.RequestAborted.IsCancellationRequested;
 
     private static string? GetClientId(HttpContext context) =>
         context.Request.Headers.TryGetValue(ClientIdHeader, out var values) && !string.IsNullOrWhiteSpace(values.FirstOrDefault())
             ? values.First()
             : null;
 
+    /// <summary>
+    /// Resuelve el identificador de operacion de la peticion. Se resuelve una sola vez por
+    /// peticion y se guarda en <see cref="HttpContext.Items"/>: la operacion registrada, la
+    /// linea de log y la cabecera de respuesta llevan SIEMPRE el mismo identificador, sea el
+    /// que propose el cliente o uno generado por el servidor.
+    /// </summary>
     private static string GetOrCreateOperationId(HttpContext context)
     {
+        if (context.Items.TryGetValue(OperationIdItemKey, out var cached) && cached is string cachedId)
+        {
+            return cachedId;
+        }
+
+        string operationId;
         if (context.Request.Headers.TryGetValue(OperationIdHeader, out var values) &&
             !string.IsNullOrWhiteSpace(values.FirstOrDefault()))
         {
-            return values.First()!;
+            operationId = values.First()!;
+        }
+        else
+        {
+            operationId = Guid.NewGuid().ToString("n");
         }
 
-        var operationId = Guid.NewGuid().ToString("n");
-        context.Response.Headers[OperationIdHeader] = operationId;
+        context.Items[OperationIdItemKey] = operationId;
+
+        // La respuesta devuelve el identificador efectivo, para que el cliente pueda correlacionar
+        // su peticion con la operacion y con el log, incluso si el id lo puso el cliente.
+        if (!context.Response.HasStarted)
+        {
+            context.Response.Headers[OperationIdHeader] = operationId;
+        }
+
         return operationId;
     }
+
+    /// <summary>Registra el fallo de una publicación en las operaciones y en el log.</summary>
+    private static async Task RecordPublishFailureAsync(
+        CatalogService catalog,
+        IServerLog log,
+        HttpContext context,
+        string operationId,
+        string clientId,
+        string code,
+        string message,
+        DateTimeOffset started,
+        CancellationToken cancellationToken)
+    {
+        await catalog.RecordOperationAsync(new ServerOperation(
+            operationId, clientId, "catalog.publish", OperationStatus.Failed, started, DateTimeOffset.UtcNow, code),
+            cancellationToken);
+        await LogAsync(log, context, $"package.create.{code}", LogSeverity.Warning, message);
+    }
+
+    /// <summary>Traduce el parametro de la excepcion al campo del formulario.</summary>
+    private static string FieldForArgument(ArgumentException exception) => exception.ParamName switch
+    {
+        "entryPoint" => "entryPoint",
+        "gameId" => "gameId",
+        "version" => "version",
+        "gameTitle" => "title",
+        "files" => "sourceDirectory",
+        _ => "request",
+    };
 
     private static Task LogAsync(IServerLog log, HttpContext context, string eventName, LogSeverity severity, string message)
     {
         var clientId = GetClientId(context) ?? "anonymous";
-        var operationId = context.Response.Headers.TryGetValue(OperationIdHeader, out var op) && !string.IsNullOrWhiteSpace(op.FirstOrDefault())
-            ? op.First()!
-            : Guid.NewGuid().ToString("n");
+        var operationId = GetOrCreateOperationId(context);
         return log.LogAsync(new LogEntry(DateTimeOffset.UtcNow, clientId, operationId, severity, eventName, message));
     }
 }

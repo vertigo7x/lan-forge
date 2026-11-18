@@ -1,74 +1,54 @@
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Headless;
-using Avalonia.Platform;
-using Avalonia.Threading;
-using LanForge.Server;
+using LanForge.Server.Http;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace LanForge.UnitTests.Server;
 
 /// <summary>
-/// Arranca la aplicación del servidor en modo headless para poder comprobar el
-/// formulario de creación de paquetes sin depender de una pantalla.
+/// Monta el host web del servidor sobre un directorio temporal: las pruebas de la UI
+/// del organizador necesitan el contenedor de servicios real (el mismo que usa la
+/// aplicacion), pero sin tocar el perfil del usuario.
 /// </summary>
 public sealed class HeadlessServerFixture : IDisposable
 {
-    private static readonly object Gate = new();
-    private static bool _started;
+    private readonly TempDirectory _temp = new();
+    private readonly WebApplication _app;
 
     public HeadlessServerFixture()
     {
-        lock (Gate)
-        {
-            if (_started)
-            {
-                return;
-            }
+        // Puerto 0: el sistema elige uno libre, asi que el test no depende del 8710.
+        _app = ServerWebHost.CreateApp(
+            new ServerOptions(_temp.Path, HttpPort: 0, ListenAddress: "127.0.0.1"));
+        _app.StartAsync().GetAwaiter().GetResult();
 
-            try
-            {
-                AppBuilder.Configure<App>()
-                    .UseHeadless(new AvaloniaHeadlessPlatformOptions())
-                    .SetupWithoutStarting();
-            }
-            catch (InvalidOperationException ex) when (ex.Message.Contains("Setup was already called", StringComparison.Ordinal))
-            {
-                // Otra colección de tests ya inicializó Avalonia en este proceso.
-            }
-            _started = true;
-        }
+        // La ventana del organizador lee sus servicios de aqui.
+        LanForge.Server.App.WebServices = _app.Services;
     }
 
     public void Dispose()
     {
-        // El headless se inicializa una sola vez por proceso: no se cierra aquí.
+        try
+        {
+            _app.StopAsync().GetAwaiter().GetResult();
+            _app.DisposeAsync().AsTask().GetAwaiter().GetResult();
+        }
+        catch (ObjectDisposedException)
+        {
+            // El host ya estaba cerrado.
+        }
+
+        _temp.Dispose();
     }
 
-    public static void DrainUiQueue()
-    {
-        // En los tests de UI el hilo de xUnit no es necesariamente el hilo del
-        // dispatcher de Avalonia. Encargar el trabajo al dispatcher evita tocar
-        // la composición visual desde otro hilo.
-        Dispatcher.UIThread.Post(() => Dispatcher.UIThread.RunJobs());
-    }
+    /// <summary>Directorio temporal donde vive el estado del host.</summary>
+    public string TempPath => _temp.Path;
 
-    /// <summary>
-    /// Ejecuta una acción en el hilo de la interfaz de Avalonia. Si la aplicación
-    /// cliente es la que inicializó Avalonia, el recurso de fuentes del cliente
-    /// no está disponible: en ese caso la acción se ejecuta sin bindings de XAML.
-    /// </summary>
-    public static void RunOnUiThread(Action action)
-    {
-        Dispatcher.UIThread.Invoke(action);
-    }
+    /// <summary>Direccion base del host de pruebas.</summary>
+    public string Address => _app.Services.GetRequiredService<IServer>()
+        .Features.Get<IServerAddressesFeature>()!.Addresses.First();
 
-    /// <summary>Ejecuta las tareas pendientes del dispatcher de la interfaz.</summary>
-    public static void RunUiJobs()
-    {
-        RunOnUiThread(() => Dispatcher.UIThread.RunJobs());
-    }
+    /// <summary>Servicios del host: el mismo contenedor que usa la UI real.</summary>
+    public IServiceProvider Services => _app.Services;
 }
-
-/// <summary>Los tests de UI del servidor no se ejecutan en paralelo entre sí.</summary>
-[CollectionDefinition("Servidor-UI", DisableParallelization = true)]
-public sealed class ServidorUiCollection : ICollectionFixture<HeadlessServerFixture>;

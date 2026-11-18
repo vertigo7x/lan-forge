@@ -35,6 +35,7 @@ public static class ServerWebHost
         builder.Services.AddSingleton<IServerLog>(
             new JsonlServerLog(options.DataDirectory));
         builder.Services.AddSingleton<CatalogService>();
+        builder.Services.AddSingleton<CreatePackageUseCase>();
 
         // Capa de servicio del formulario de creacion de paquetes. Ahora mismo se
         // resuelve con la simulacion (no toca la red); cuando exista el cliente

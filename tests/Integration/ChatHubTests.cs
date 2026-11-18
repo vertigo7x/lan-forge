@@ -70,6 +70,40 @@ public sealed class ChatHubTests : IDisposable
     }
 
     [Fact]
+    public async Task UnMiembroPorNombre_NoPuedeEscribirEnUnCanalEnElQueNoEsta()
+    {
+        var options = new ServerOptions(_temp.Path, HttpPort: 0, ListenAddress: "127.0.0.1");
+        await using var app = ServerWebHost.CreateApp(options);
+        await app.StartAsync();
+        var address = app.Services.GetRequiredService<IServer>()
+            .Features.Get<IServerAddressesFeature>()!.Addresses.First();
+
+        // Ana entra en la sala del juego.
+        await using var ana = CreateClient(address, "AnaPC");
+        await ana.StartAsync();
+        await ana.InvokeAsync("Join", "quake3");
+
+        // OTRO jugador con el MISMO nombre de usuario que Ana, pero que nunca entro.
+        // Antes el servidor comparaba nombres: le dejaba escribir en la sala de Ana.
+        await using var impostor = CreateClient(address, "AnaPC");
+        await impostor.StartAsync();
+
+        var anaReceived = new TaskCompletionSource<ChatMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        ana.On<ChatMessage>(ChatHubContract.ReceiveMessageMethod, message => anaReceived.TrySetResult(message));
+
+        await impostor.InvokeAsync("Send", "quake3", "mensaje inyectado");
+
+        // El impostor no es miembro: nadie debe recibir su mensaje.
+        await Task.Delay(500);
+        Assert.False(anaReceived.Task.IsCompleted);
+
+        // Y el canal sigue con un solo miembro.
+        var members = await ana.InvokeAsync<IReadOnlyList<string>>("ListMembers", "quake3");
+        Assert.Single(members);
+        Assert.Equal("AnaPC", members[0]);
+    }
+
+    [Fact]
     public async Task Registry_KeepsGeneral_AndRemovesEmptyRooms()
     {
         var registry = new ChatRoomRegistry();
