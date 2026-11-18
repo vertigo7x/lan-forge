@@ -88,7 +88,7 @@ public static class ApiEndpoints
             }
         });
 
-        api.MapPost("/packages", async (HttpContext context, CatalogService catalog, IServerLog log, CancellationToken cancellationToken) =>
+        api.MapPost("/packages", async (HttpContext context, CatalogService catalog, CreatePackageUseCase createPackage, IServerLog log, CancellationToken cancellationToken) =>
         {
             var started = DateTimeOffset.UtcNow;
             var operationId = GetOrCreateOperationId(context);
@@ -108,45 +108,23 @@ public static class ApiEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
-            var errors = CreatePackageValidator.Validate(request);
-            if (errors.Count > 0)
-            {
-                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "validation_failed", "La solicitud no cumple las validaciones del paquete.", started, cancellationToken);
-                return Results.Json(
-                    new ApiErrorResponse("validation_failed", "La solicitud no cumple las validaciones del paquete.", errors),
-                    SharedJson.Options,
-                    statusCode: StatusCodes.Status400BadRequest);
-            }
-
             try
             {
-                var previousVersion = await catalog.GetPublishedVersionAsync(request!.GameId!, cancellationToken);
-                var entry = await catalog.PublishPackageAsync(
-                    request.GameId!,
-                    request.Title!,
-                    request.Version!,
-                    request.SourceDirectory!,
-                    request.EntryPoint!,
-                    request.Arguments,
-                    cancellationToken);
-                var manifest = await catalog.GetManifestAsync(entry.PackageId, cancellationToken);
-                var created = new CreatePackageResponse(
-                    entry.PackageId,
-                    entry.GameId,
-                    entry.Title,
-                    entry.Version,
-                    manifest?.EntryPoint ?? request.EntryPoint!,
-                    manifest?.Arguments ?? request.Arguments,
-                    entry.TotalSizeBytes,
-                    entry.FileCount,
-                    manifest?.CreatedUtc ?? started,
-                    previousVersion);
+                var created = await createPackage.CreateAsync(request, cancellationToken);
 
                 await catalog.RecordOperationAsync(new ServerOperation(
                     operationId, clientId, "catalog.publish", OperationStatus.Completed, started, DateTimeOffset.UtcNow,
-                    $"{entry.GameId} v{entry.Version}"), cancellationToken);
-                await LogAsync(log, context, "package.created", LogSeverity.Info, $"Paquete publicado: {entry.GameId} v{entry.Version} ({entry.FileCount} archivos)");
+                    $"{created.GameId} v{created.Version}"), cancellationToken);
+                await LogAsync(log, context, "package.created", LogSeverity.Info, $"Paquete publicado: {created.GameId} v{created.Version} ({created.FileCount} archivos)");
                 return Results.Json(created, SharedJson.Options, statusCode: StatusCodes.Status201Created);
+            }
+            catch (PackageValidationException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "validation_failed", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("validation_failed", ex.Message, ex.Errors),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
             }
             catch (PackageVersionConflictException ex)
             {
@@ -164,11 +142,19 @@ public static class ApiEndpoints
                     SharedJson.Options,
                     statusCode: StatusCodes.Status400BadRequest);
             }
-            catch (DirectoryNotFoundException ex)
+            catch (PackageSourceNotFoundException ex)
             {
                 await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "not_found", ex.Message, started, cancellationToken);
                 return Results.Json(
                     new ApiErrorResponse("not_found", ex.Message, [new ApiFieldError("sourceDirectory", "not_found", ex.Message)]),
+                    SharedJson.Options,
+                    statusCode: StatusCodes.Status400BadRequest);
+            }
+            catch (PackageEntryPointNotFoundException ex)
+            {
+                await RecordPublishFailureAsync(catalog, log, context, operationId, clientId, "invalid_argument", ex.Message, started, cancellationToken);
+                return Results.Json(
+                    new ApiErrorResponse("invalid_argument", ex.Message, [new ApiFieldError(ex.Field, "not_found", ex.Message)]),
                     SharedJson.Options,
                     statusCode: StatusCodes.Status400BadRequest);
             }
