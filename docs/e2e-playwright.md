@@ -105,9 +105,12 @@ headless de Avalonia que ya existe en el repo:
 - `HeadlessAvalonia.RunUiJobs()` para vaciar la cola del dispatcher.
 
 Ejemplo de referencia: `tests/Unit/Server/PackageCreateViewComponentTests.cs`
-(rellena el formulario, envia y comprueba los errores por campo) y
+(rellena el formulario, envia y comprueba los errores por campo),
 `tests/Unit/Server/PackageCreateViewModelEndpointTests.cs` (la misma vista
-contra el endpoint real, sin doblar la capa de servicio).
+contra el endpoint real, sin doblar la capa de servicio) y
+`tests/Unit/Server/PackageCreateDuplicateSubmissionE2ETests.cs` (doble click y
+clicks repetidos sobre el boton de envio: el endpoint tiene que recibir una sola
+peticion).
 
 Lo que si aporta la suite de Playwright es la otra mitad del flujo: que el
 servidor real acepte la peticion, valide los campos, publique el paquete y lo
