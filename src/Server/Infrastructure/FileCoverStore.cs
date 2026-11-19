@@ -6,11 +6,6 @@ namespace LanForge.Server.Infrastructure;
 /// <summary>Portadas en disco: {root}/{gameId}{ext}. Los nombres servidos por HTTP se validan estrictamente.</summary>
 public sealed class FileCoverStore : ICoverStore
 {
-    private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".png", ".jpg", ".jpeg", ".webp",
-    };
-
     private static readonly Regex FileNamePattern = new(
         "^[a-zA-Z0-9_-]+\\.(png|jpg|jpeg|webp)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -26,7 +21,7 @@ public sealed class FileCoverStore : ICoverStore
     public Task<string> SaveAsync(string gameId, string sourceImagePath, CancellationToken cancellationToken = default)
     {
         var extension = Path.GetExtension(sourceImagePath);
-        if (!AllowedExtensions.Contains(extension))
+        if (!CoverImageRules.IsAllowedExtension(extension))
         {
             throw new ArgumentException(
                 $"Formato de imagen no soportado: '{extension}'. Usa png, jpg, jpeg o webp.",

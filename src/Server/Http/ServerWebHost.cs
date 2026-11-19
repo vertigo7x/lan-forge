@@ -37,6 +37,16 @@ public static class ServerWebHost
         builder.Services.AddSingleton<CatalogService>();
         builder.Services.AddSingleton<CreatePackageUseCase>();
 
+        // Adjuntar la portada de un juego ya publicado. El endpoint de creacion de
+        // paquetes habla JSON y el manifiesto firmado no admite una imagen, asi que
+        // la portada se asigna en proceso, por su propio canal.
+        builder.Services.AddSingleton<ICoverUploadService>(sp => new CatalogCoverUploadService(
+            sp.GetRequiredService<CatalogService>(),
+            sp.GetRequiredService<ICoverStore>()));
+
+        // Previsualizacion de la portada en el selector del formulario.
+        builder.Services.AddSingleton<ICoverPreviewLoader, AvaloniaCoverPreviewLoader>();
+
         // Capa de servicio del formulario de creacion de paquetes. El formulario de
         // la UI habla con el endpoint real por HTTP: el servidor se llama a si mismo
         // por el bucle local, de modo que la peticion recorre la misma ruta que

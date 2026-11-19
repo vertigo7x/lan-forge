@@ -13,6 +13,7 @@ public static class PackageCreationFields
     public const string SourceDirectory = "sourceDirectory";
     public const string EntryPoint = "entryPoint";
     public const string Arguments = "arguments";
+    public const string CoverPath = "coverPath";
 }
 
 /// <summary>Datos que rellena el organizador para publicar un juego portable.</summary>
