@@ -33,6 +33,98 @@ public static class PackageSourcePaths
         path.EndsWith(ExecutableExtension, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
+    /// Comprueba que la carpeta origen y el ejecutable son utilizables y devuelve
+    /// el motivo por el que no lo son.
+    ///
+    /// Es la regla unica que comparten el boton de publicar (que se deshabilita)
+    /// y los mensajes que se muestran junto a cada campo. Vive aqui para que el
+    /// boton y el texto no puedan divergir: si el boton se deshabilita, el campo
+    /// dice por que, y siempre con la misma redaccion.
+    ///
+    /// Devuelve null cuando las dos rutas son utilizables.
+    /// </summary>
+    public static string? Validate(string? sourceDirectory, string? executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(sourceDirectory))
+        {
+            return MissingSourceDirectoryMessage;
+        }
+
+        if (!Directory.Exists(sourceDirectory))
+        {
+            return MissingSourceDirectoryMessage;
+        }
+
+        if (string.IsNullOrWhiteSpace(executablePath))
+        {
+            return MissingExecutableMessage;
+        }
+
+        // La extension se comprueba antes que la existencia: un archivo que no
+        // es un .exe no vale como ejecutable aunque exista.
+        if (!IsExecutable(executablePath))
+        {
+            return NotExecutableMessage;
+        }
+
+        if (!File.Exists(executablePath))
+        {
+            return MissingExecutableMessage;
+        }
+
+        // El ejecutable tiene que estar dentro de la carpeta origen: es lo que
+        // convierte la ruta absoluta en la ruta relativa que espera el payload.
+        // Sin esta comprobacion el boton se habilita y el envio falla despues
+        // con un error que el organizador no puede entender.
+        if (!IsInsideDirectory(sourceDirectory, executablePath))
+        {
+            return ExecutableOutsideSourceDirectoryMessage;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Indica si la ruta esta dentro del directorio indicado. La comparacion no
+    /// distingue mayusculas porque Windows no las distingue, y las dos rutas se
+    /// normalizan (separadores '/' y sin barra final) antes de compararlas.
+    /// </summary>
+    public static bool IsInsideDirectory(string directory, string path)
+    {
+        var root = NormalizeRoot(directory);
+        var candidate = NormalizePath(path);
+
+        return root.Length > 0 &&
+               candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase) &&
+               candidate.Length > root.Length;
+    }
+
+    /// <summary>
+    /// Mensaje de la carpeta origen que no existe. No lleva la ruta porque la
+    /// ruta ya se ve en el campo de al lado.
+    /// </summary>
+    public const string MissingSourceDirectoryMessage = "La carpeta origen no existe.";
+
+    /// <summary>Message del ejecutable que no existe.</summary>
+    public const string MissingExecutableMessage = "El ejecutable no existe.";
+
+    /// <summary>
+    /// Mensaje del archivo que no es un ejecutable de Windows. La extension
+    /// admitida sale de <see cref="ExecutableExtension"/> para que el texto y la
+    /// regla no puedan divergir.
+    /// </summary>
+    public static string NotExecutableMessage =>
+        $"El ejecutable tiene que ser un archivo '{ExecutableExtension}'.";
+
+    /// <summary>
+    /// Mensaje del ejecutable que esta fuera de la carpeta origen. El ejecutable
+    /// forma parte del paquete, asi que tiene que vivir dentro de la carpeta que
+    /// se publica.
+    /// </summary>
+    public const string ExecutableOutsideSourceDirectoryMessage =
+        "El ejecutable tiene que estar dentro de la carpeta origen.";
+
+    /// <summary>
     /// Convierte la ruta absoluta del ejecutable en la ruta relativa que espera el
     /// payload (separadores <c>/</c>, sin ruta inicial ni <c>..</c>).
     ///
@@ -69,7 +161,7 @@ public static class PackageSourcePaths
         if (!executable.StartsWith(sourceRoot, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException(
-                "El ejecutable tiene que estar dentro de la carpeta origen.",
+                ExecutableOutsideSourceDirectoryMessage,
                 nameof(executablePath));
         }
 
@@ -79,7 +171,7 @@ public static class PackageSourcePaths
         if (relative.Length == 0)
         {
             throw new ArgumentException(
-                "El ejecutable tiene que estar dentro de la carpeta origen.",
+                ExecutableOutsideSourceDirectoryMessage,
                 nameof(executablePath));
         }
 

@@ -105,6 +105,11 @@
       <TextBlock Text="{Binding StatusMessage}"
                  TextWrapping="Wrap"/>
 
+      <TextBlock x:Name="SourcePathsErrorText"
+                 Text="{Binding SourcePathsError}"
+                 Foreground="#F87171"
+                 TextWrapping="Wrap"/>
+
       <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
         <Button x:Name="ResetButton"
                 Content="Restablecer"

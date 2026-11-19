@@ -214,28 +214,32 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     public bool CanPublish => CanSubmit && HasValidSourcePaths;
 
     /// <summary>
+    /// Motivo por el que no se puede publicar todavia, o null si las rutas son
+    /// utilizables.
+    ///
+    /// Es el mensaje que explica el boton deshabilitado: el organizador elige la
+    /// carpeta y el ejecutable con los dialogos, pero entre una eleccion y otra
+    /// el contenido del disco puede cambiar (el organizador puede borrar la
+    /// carpeta o mover el ejecutable). El texto sale de la misma regla que
+    /// deshabilita el boton, asi que siempre coinciden.
+    /// </summary>
+    public string? SourcePathsError => PackageSourcePaths.Validate(SourceDirectory, EntryPoint);
+
+    /// <summary>True cuando hay un motivo por el que no se puede publicar.</summary>
+    public bool HasSourcePathsError => !string.IsNullOrEmpty(SourcePathsError);
+
+    /// <summary>
     /// True cuando la carpeta origen y el ejecutable son utilizables. Se
     /// recalcula cada vez que se leen porque el contenido del disco puede cambiar
     /// sin que el formulario se entere (el organizador puede borrar la carpeta
     /// despues de elegirla).
+    ///
+    /// La regla es la de <see cref="PackageSourcePaths.Validate"/>, la misma que
+    /// usan los mensajes de los campos: el boton se deshabilita y el campo dice
+    /// por que, sin poder divergir.
     /// </summary>
-    private bool HasValidSourcePaths
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(SourceDirectory) || !Directory.Exists(SourceDirectory))
-            {
-                return false;
-            }
-
-            if (string.IsNullOrWhiteSpace(EntryPoint) || !PackageSourcePaths.IsExecutable(EntryPoint))
-            {
-                return false;
-            }
-
-            return File.Exists(EntryPoint);
-        }
-    }
+    private bool HasValidSourcePaths =>
+        PackageSourcePaths.Validate(SourceDirectory, EntryPoint) is null;
 
     // ---------- Acciones ----------
 
@@ -341,7 +345,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         var path = folder.Trim();
         if (!Directory.Exists(path))
         {
-            SourceDirectoryError = $"La carpeta origen no existe: '{path}'.";
+            SourceDirectoryError = PackageSourcePaths.MissingSourceDirectoryMessage;
             StatusMessage = "La carpeta elegida no existe.";
             StatusIsError = true;
             return;
@@ -358,7 +362,10 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     /// campo se queda como estaba.
     ///
     /// El filtro del dialogo es solo una comodidad: aqui se comprueba la extension
-    /// para que el campo no guarde un archivo que no vale como ejecutable.
+    /// y la existencia para que el campo no guarde un archivo que no vale como
+    /// ejecutable. Las dos reglas son las de
+    /// <see cref="PackageSourcePaths.Validate"/>, las mismas que deshabilitan el
+    /// boton de publicar.
     /// </summary>
     public async Task PickEntryPointAsync()
     {
@@ -369,11 +376,24 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         }
 
         var path = executable.Trim();
+
+        // La extension se comprueba antes que la existencia: un archivo que no es
+        // un .exe no vale como ejecutable aunque exista.
         if (!PackageSourcePaths.IsExecutable(path))
         {
-            EntryPointError =
-                $"El ejecutable tiene que ser un archivo '{PackageSourcePaths.ExecutableExtension}'.";
+            EntryPointError = PackageSourcePaths.NotExecutableMessage;
             StatusMessage = "El archivo elegido no es un ejecutable de Windows.";
+            StatusIsError = true;
+            return;
+        }
+
+        // El dialogo del sistema operativo solo deja elegir archivos que existen,
+        // pero un proveedor puede devolver una ruta que no esta en el disco: esa
+        // ruta no se guarda en el campo.
+        if (!File.Exists(path))
+        {
+            EntryPointError = PackageSourcePaths.MissingExecutableMessage;
+            StatusMessage = "El ejecutable elegido no existe.";
             StatusIsError = true;
             return;
         }
@@ -483,10 +503,13 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         OnPropertyChanged(propertyName);
 
         // El boton de publicar depende de las rutas elegidas: al cambiarlas hay
-        // que avisar de que su estado puede haber cambiado.
+        // que avisar de que su estado puede haber cambiado, y tambien del
+        // mensaje que explica por que sigue deshabilitado.
         if (propertyName is nameof(SourceDirectory) or nameof(EntryPoint))
         {
             OnPropertyChanged(nameof(CanPublish));
+            OnPropertyChanged(nameof(SourcePathsError));
+            OnPropertyChanged(nameof(HasSourcePathsError));
         }
 
         // CanPublish depende de CanSubmit: si el envio arranca o termina, el

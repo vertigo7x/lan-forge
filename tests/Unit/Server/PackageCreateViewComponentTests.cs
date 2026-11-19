@@ -276,6 +276,123 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
         HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_si_la_carpeta_no_existe()
+    {
+        // El boton se deshabilita y el formulario dice por que: el organizador
+        // no puede adivinar que la carpeta que eligio ya no esta en el disco.
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            Path.Combine(_game.SourceDirectory, "no-existe"),
+            _game.ExecutablePath,
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        var errors = ErrorTexts(window);
+        Assert.Equal(
+            PackageSourcePaths.MissingSourceDirectoryMessage,
+            errors["SourcePathsErrorText"]);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_si_el_ejecutable_no_existe()
+    {
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            Path.Combine(_game.SourceDirectory, "no-existe.exe"),
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        var errors = ErrorTexts(window);
+        Assert.Equal(
+            PackageSourcePaths.MissingExecutableMessage,
+            errors["SourcePathsErrorText"]);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_si_el_ejecutable_no_termina_en_exe()
+    {
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        var dll = Path.Combine(_game.SourceDirectory, "game.dll");
+        File.WriteAllText(dll, "MZ");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            dll,
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        var errors = ErrorTexts(window);
+        Assert.Equal(
+            PackageSourcePaths.NotExecutableMessage,
+            errors["SourcePathsErrorText"]);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_se_habilita_con_una_carpeta_y_un_ejecutable_validos()
+    {
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = false;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.True(enabled);
+
+        // Con las rutas validas no hay ningun motivo por el que no se pueda
+        // publicar: el mensaje queda vacio.
+        var errors = ErrorTexts(window);
+        Assert.True(string.IsNullOrEmpty(errors["SourcePathsErrorText"]));
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
     private static T[] Descendants<T>(Window window) where T : Control
     {
         T[] controls = [];

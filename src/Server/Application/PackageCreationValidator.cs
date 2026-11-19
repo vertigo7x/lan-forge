@@ -104,7 +104,7 @@ public static class PackageCreationValidator
         if (!Directory.Exists(sourceDirectory))
         {
             errors[PackageCreationFields.SourceDirectory] =
-                $"La carpeta origen no existe: '{sourceDirectory}'.";
+                PackageSourcePaths.MissingSourceDirectoryMessage;
         }
     }
 
@@ -120,8 +120,7 @@ public static class PackageCreationValidator
         // un .exe no vale como ejecutable aunque exista.
         if (!PackageSourcePaths.IsExecutable(entryPoint))
         {
-            errors[PackageCreationFields.EntryPoint] =
-                $"El ejecutable tiene que ser un archivo '{PackageSourcePaths.ExecutableExtension}'.";
+            errors[PackageCreationFields.EntryPoint] = PackageSourcePaths.NotExecutableMessage;
             return;
         }
 
@@ -130,8 +129,7 @@ public static class PackageCreationValidator
         // valida antes de publicar (el organizador puede moverla o borrarla).
         if (!File.Exists(entryPoint))
         {
-            errors[PackageCreationFields.EntryPoint] =
-                $"El ejecutable no existe: '{entryPoint}'.";
+            errors[PackageCreationFields.EntryPoint] = PackageSourcePaths.MissingExecutableMessage;
         }
     }
 
