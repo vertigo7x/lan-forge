@@ -32,11 +32,27 @@ public sealed record ManifestFileEntry(string Path, string Sha256, long Size)
         }
 
         var normalized = relativePath.Replace('\\', '/').TrimStart('/');
-        if (normalized.StartsWith('/') || normalized.Contains(':') || normalized.Split('/').Any(p => p == ".."))
+        if (LooksAbsolute(relativePath) || normalized.Contains(':') || normalized.Split('/').Any(p => p == ".."))
         {
             throw new ArgumentException($"Ruta de archivo inválida o insegura: '{relativePath}'.", nameof(relativePath));
         }
 
         return normalized;
+    }
+
+    /// <summary>
+    /// Detecta rutas absolutas por patrón (raíz de Unix, UNC o unidad con letra).
+    /// La comprobación se hace sobre la cadena original porque normalizar no
+    /// convierte una ruta absoluta en relativa: quitarle la barra inicial solo
+    /// escondería que era absoluta. Se hace por patrón y no con
+    /// <see cref="Path.IsPathRooted(string)"/> para que el resultado no dependa del
+    /// sistema de ficheros del host.
+    /// </summary>
+    private static bool LooksAbsolute(string path)
+    {
+        var trimmed = path.Trim();
+        return trimmed.StartsWith('/') ||
+               trimmed.StartsWith('\\') ||
+               (trimmed.Length >= 3 && char.IsLetter(trimmed[0]) && trimmed[1] == ':');
     }
 }
