@@ -18,6 +18,13 @@ public static class PackageSourcePaths
     public const string ExecutableExtension = ".exe";
 
     /// <summary>
+    /// Patrón del filtro del diálogo de archivos: solo ejecutables de Windows.
+    /// Lo usa el diálogo nativo del sistema operativo, que lo aplica como
+    /// comodín del nombre de archivo.
+    /// </summary>
+    public const string ExecutablePattern = "*" + ExecutableExtension;
+
+    /// <summary>
     /// Indica si la ruta es un ejecutable: tiene que terminar en <c>.exe</c>.
     /// La comparacion no distingue mayusculas porque Windows no las distingue.
     /// </summary>

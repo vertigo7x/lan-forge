@@ -58,6 +58,30 @@ public partial class PackageCreateView : UserControl
     /// <summary>Valida y envía el formulario usando el servicio inyectado.</summary>
     public Task SubmitAsync() => ViewModel.SubmitAsync();
 
+    /// <summary>
+    /// Opciones del diálogo nativo de archivos del ejecutable.
+    ///
+    /// El filtro es solo <c>*.exe</c>: el diálogo del sistema operativo deja
+    /// elegir únicamente ejecutables de Windows. La comprobación de la
+    /// extensión se repite después en el view model, porque el filtro es una
+    /// comodidad del diálogo y no una garantía.
+    ///
+    /// Vive en un método aparte para que las pruebas puedan comprobar el
+    /// filtro sin abrir un diálogo.
+    /// </summary>
+    public static FilePickerOpenOptions ExecutablePickerOptions() => new()
+    {
+        AllowMultiple = false,
+        Title = "Elige el ejecutable del juego",
+        FileTypeFilter =
+        [
+            new FilePickerFileType("Ejecutable de Windows")
+            {
+                Patterns = [PackageSourcePaths.ExecutablePattern],
+            },
+        ],
+    };
+
     private static IPackageCreationService ResolveService()
     {
         var services = App.WebServices ?? throw new InvalidOperationException("El host web no está disponible.");
@@ -111,15 +135,7 @@ internal sealed class TopLevelPathPicker : IPathPicker
             return null;
         }
 
-        var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            AllowMultiple = false,
-            Title = "Elige el ejecutable del juego",
-            FileTypeFilter =
-            [
-                new FilePickerFileType("Ejecutable de Windows") { Patterns = ["*.exe"] },
-            ],
-        });
+        var files = await storage.OpenFilePickerAsync(PackageCreateView.ExecutablePickerOptions());
 
         cancellationToken.ThrowIfCancellationRequested();
         return files.Count > 0 ? LocalPath(files[0]) : null;
