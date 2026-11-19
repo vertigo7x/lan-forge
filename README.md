@@ -52,5 +52,8 @@ dotnet test tests/E2E
 
 Documentación de diseño y plan: [`docs/plan.md`](docs/plan.md), [`docs/tasks.md`](docs/tasks.md).
 
+Qué se puede y qué no se puede probar de los diálogos nativos del sistema
+operativo: [`docs/pruebas-interfaces-nativas.md`](docs/pruebas-interfaces-nativas.md).
+
 Cambios de calidad del servidor y su trazabilidad con la auditoría:
 [`docs/cambios-servidor-8-1.md`](docs/cambios-servidor-8-1.md).

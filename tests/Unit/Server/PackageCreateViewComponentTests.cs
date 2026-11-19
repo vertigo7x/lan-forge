@@ -17,8 +17,12 @@ namespace LanForge.UnitTests.Server;
 /// compartido por toda la aplicación.
 /// </summary>
 [Collection("Cliente-UI")]
-public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixture)
+public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixture) : IDisposable
 {
+    private readonly TemporaryGameFolder _game = new();
+
+    public void Dispose() => _game.Dispose();
+
     [Fact]
     public void El_contenedor_resuelve_el_cliente_real_del_endpoint()
     {
@@ -80,8 +84,8 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             "id con espacios",
             "Neon Drift",
             "no-es-una-version",
-            "/games/neon",
-            "game.exe",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
             "--fullscreen"));
         Submit(view);
         HeadlessAvalonia.RunUiJobs();
@@ -104,8 +108,8 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             "neon-drift",
             new string('t', PackageCreationValidator.MaxTitleLength + 1),
             "1.2.3",
-            "/games/neon",
-            "game.exe",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
             "--fullscreen"));
         Submit(view);
         HeadlessAvalonia.RunUiJobs();
@@ -130,8 +134,8 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             "neon-drift",
             "Neon Drift",
             "1.2.3",
-            "/games/neon",
-            "game.exe",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
             "--fullscreen"));
         Submit(view);
         HeadlessAvalonia.RunUiJobs();
@@ -140,7 +144,7 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
         Assert.Equal("neon-drift", request.GameId);
         Assert.Equal("Neon Drift", request.Title);
         Assert.Equal("1.2.3", request.Version);
-        Assert.Equal("/games/neon", request.SourceDirectory);
+        Assert.Equal(_game.SourceDirectory, request.SourceDirectory);
         Assert.Equal("game.exe", request.EntryPoint);
         Assert.Equal("--fullscreen", request.Arguments);
 
@@ -157,8 +161,8 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             "neon-drift",
             "Neon Drift",
             "1.2.3",
-            "/games/neon",
-            "game.exe",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
             "--fullscreen"));
         Submit(view);
         HeadlessAvalonia.RunUiJobs();
@@ -291,6 +295,173 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             window.UpdateLayout();
         });
         return (view!, window!);
+    }
+
+    [Fact]
+    public void Muestra_los_botones_de_examinar_del_sistema_operativo()
+    {
+        var service = new RecordingPackageCreationService();
+        var (_, window) = ShowView(service);
+
+        var buttons = Descendants<Button>(window);
+        Assert.Contains(buttons, button => button.Name == "PickSourceDirectoryButton");
+        Assert.Contains(buttons, button => button.Name == "PickEntryPointButton");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void La_carpeta_y_el_ejecutable_no_se_pueden_escribir_a_mano()
+    {
+        var service = new RecordingPackageCreationService();
+        var (_, window) = ShowView(service);
+
+        // Las dos rutas se eligen con los dialogos del sistema operativo: los
+        // campos solo muestran lo elegido y no se pueden editar.
+        var textBoxes = Descendants<TextBox>(window);
+        var sourceDirectory = textBoxes.Single(box => box.Name == "SourceDirectoryBox");
+        var entryPoint = textBoxes.Single(box => box.Name == "EntryPointBox");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            Assert.True(sourceDirectory.IsReadOnly);
+            Assert.True(entryPoint.IsReadOnly);
+        });
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_sin_carpeta_ni_ejecutable()
+    {
+        var service = new RecordingPackageCreationService();
+        var (_, window) = ShowView(service);
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_si_la_carpeta_no_existe()
+    {
+        // El boton se deshabilita y el formulario dice por que: el organizador
+        // no puede adivinar que la carpeta que eligio ya no esta en el disco.
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            Path.Combine(_game.SourceDirectory, "no-existe"),
+            _game.ExecutablePath,
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        var errors = ErrorTexts(window);
+        Assert.Equal(
+            PackageSourcePaths.MissingSourceDirectoryMessage,
+            errors["SourcePathsErrorText"]);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_si_el_ejecutable_no_existe()
+    {
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            Path.Combine(_game.SourceDirectory, "no-existe.exe"),
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        var errors = ErrorTexts(window);
+        Assert.Equal(
+            PackageSourcePaths.MissingExecutableMessage,
+            errors["SourcePathsErrorText"]);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_esta_deshabilitado_si_el_ejecutable_no_termina_en_exe()
+    {
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        var dll = Path.Combine(_game.SourceDirectory, "game.dll");
+        File.WriteAllText(dll, "MZ");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            dll,
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.False(enabled);
+
+        var errors = ErrorTexts(window);
+        Assert.Equal(
+            PackageSourcePaths.NotExecutableMessage,
+            errors["SourcePathsErrorText"]);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_publicar_se_habilita_con_una_carpeta_y_un_ejecutable_validos()
+    {
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
+            "--fullscreen"));
+
+        var button = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = false;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = button.IsEnabled);
+
+        Assert.True(enabled);
+
+        // Con las rutas validas no hay ningun motivo por el que no se pueda
+        // publicar: el mensaje queda vacio.
+        var errors = ErrorTexts(window);
+        Assert.True(string.IsNullOrEmpty(errors["SourcePathsErrorText"]));
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
     private static T[] Descendants<T>(Window window) where T : Control

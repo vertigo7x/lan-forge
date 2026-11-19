@@ -308,13 +308,21 @@ public sealed class PackageCreateViewModelCoverTests
         IPackageCreationService service,
         ICoverUploadService? coverUploads)
     {
+        // El selector nativo valida contra el disco y el payload envia el ejecutable
+        // relativo a la carpeta origen. Esta prueba usa una carpeta real para cubrir
+        // el mismo contrato que usa el formulario.
+        var source = Path.Combine(Path.GetTempPath(), "lanforge-cover-tests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(source);
+        var executable = Path.Combine(source, "game.exe");
+        File.WriteAllBytes(executable, [0]);
+
         return new PackageCreateViewModel(service, coverUploads)
         {
             GameId = "neon-drift",
             Title = "Neon Drift",
             Version = "1.2.3",
-            SourceDirectory = "/games/neon",
-            EntryPoint = "game.exe",
+            SourceDirectory = source,
+            EntryPoint = executable,
         };
     }
 
