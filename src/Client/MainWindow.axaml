@@ -8,10 +8,12 @@
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="LanForge.Client.MainWindow"
         Title="LAN Forge"
-        Width="1280" Height="800" MinWidth="1100" MinHeight="700"
+        Width="1280" Height="800" MinWidth="360" MinHeight="700"
         Background="{StaticResource BgAppBrush}"
         FontFamily="{StaticResource MiSans}">
-  <Grid RowDefinitions="48,*" ColumnDefinitions="232,*">
+  <!-- La barra lateral se oculta cuando la ventana es pequeña, para que el
+       contenido (y el formulario de ajustes) quepa (ver MainWindow.UpdateResponsiveLayout). -->
+  <Grid x:Name="RootGrid" RowDefinitions="48,*" ColumnDefinitions="232,*">
     <!-- ===== Titlebar (cat.titlebar) ===== -->
     <Border Grid.Row="0" Grid.ColumnSpan="2" Background="{StaticResource BgTitlebarBrush}"
             BorderBrush="{StaticResource BorderBrushDefault}" BorderThickness="0,0,0,1">
@@ -38,44 +40,44 @@
     </Border>
 
     <!-- ===== Sidebar (cat.sidebar) ===== -->
-    <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
+    <Border x:Name="SidebarBorder" Grid.Row="1" Grid.Column="0" Background="{StaticResource BgSidebarBrush}"
             BorderBrush="{StaticResource BorderBrushDefault}" BorderThickness="0,0,1,0">
       <Grid Margin="12,16">
         <StackPanel Spacing="4">
-          <TextBlock Text="MENÚ" FontSize="11" FontWeight="Bold" LetterSpacing="2"
+          <TextBlock x:Name="SidebarMenuTitle" Text="MENÚ" FontSize="11" FontWeight="Bold" LetterSpacing="2"
                      Foreground="{StaticResource TextMutedBrush}" Margin="12,0,12,8"/>
           <Button x:Name="NavCatalog" Theme="{StaticResource NavItem}" Click="OnNavClick">
-            <TextBlock VerticalAlignment="Center">
+            <TextBlock x:Name="NavCatalogLabel" VerticalAlignment="Center">
               <Run Text="&#xf11b;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
-              <Run Text="   Catálogo"/>
+              <Run x:Name="NavCatalogText" Text="   Catálogo"/>
             </TextBlock>
           </Button>
           <Button x:Name="NavSteam" Theme="{StaticResource NavItem}" Click="OnNavClick">
-            <TextBlock VerticalAlignment="Center">
+            <TextBlock x:Name="NavSteamLabel" VerticalAlignment="Center">
               <Run Text="&#xf04b;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
-              <Run Text="   Steam"/>
+              <Run x:Name="NavSteamText" Text="   Steam"/>
             </TextBlock>
           </Button>
           <Button x:Name="NavChat" Theme="{StaticResource NavItem}" Click="OnNavClick">
-            <TextBlock VerticalAlignment="Center">
+            <TextBlock x:Name="NavChatLabel" VerticalAlignment="Center">
               <Run Text="&#xf0c0;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
-              <Run Text="   Jugadores"/>
+              <Run x:Name="NavChatText" Text="   Jugadores"/>
             </TextBlock>
           </Button>
           <Button x:Name="NavDownloads" Theme="{StaticResource NavItem}" Click="OnNavClick">
-            <TextBlock VerticalAlignment="Center">
+            <TextBlock x:Name="NavDownloadsLabel" VerticalAlignment="Center">
               <Run Text="&#xf019;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
-              <Run Text="   Descargas"/>
+              <Run x:Name="NavDownloadsText" Text="   Descargas"/>
             </TextBlock>
           </Button>
           <Button x:Name="NavSettings" Theme="{StaticResource NavItem}" Click="OnNavClick">
-            <TextBlock VerticalAlignment="Center">
+            <TextBlock x:Name="NavSettingsLabel" VerticalAlignment="Center">
               <Run Text="&#xf013;" FontFamily="{StaticResource FaSolid}" FontSize="13"/>
-              <Run Text="   Ajustes"/>
+              <Run x:Name="NavSettingsText" Text="   Ajustes"/>
             </TextBlock>
           </Button>
         </StackPanel>
-        <StackPanel VerticalAlignment="Bottom" Spacing="8">
+        <StackPanel x:Name="SidebarBottom" VerticalAlignment="Bottom" Spacing="8">
           <!-- cat.storage.card -->
           <Border Theme="{StaticResource Card}" Padding="12">
             <StackPanel Spacing="8">
@@ -348,15 +350,15 @@
 
       <!-- AJUSTES (screen.settings) -->
       <ScrollViewer x:Name="SettingsView" IsVisible="False">
-        <StackPanel Spacing="20" Margin="28,24">
+        <StackPanel x:Name="SettingsRoot" Spacing="20" Margin="28,24">
           <StackPanel Spacing="4">
             <TextBlock Text="Ajustes" Theme="{StaticResource T.H1}"/>
             <TextBlock Text="Configura tu perfil de jugador y la conexión con el servidor"
                        Theme="{StaticResource T.Body}"/>
           </StackPanel>
           <!-- Responsive: dos columnas si hay ancho, una sola si la ventana se estrecha.
-               Las columnas se recolocan desde MainWindow.UpdateSettingsLayout. -->
-          <Grid x:Name="SettingsColumns" ColumnDefinitions="520,360" ColumnSpacing="16" RowDefinitions="Auto,Auto,Auto">
+               Las columnas se reparten desde MainWindow.UpdateSettingsLayout. -->
+          <Grid x:Name="SettingsColumns" ColumnDefinitions="520,420" ColumnSpacing="16" RowDefinitions="Auto,Auto,Auto">
             <!-- Columna izquierda -->
             <StackPanel x:Name="SettingsLeftColumn" Grid.Column="0" Grid.Row="0" Spacing="16"
                         HorizontalAlignment="Stretch">
@@ -385,7 +387,8 @@
                     <TextBlock Text="&#xf058;" FontFamily="{StaticResource FaSolid}" FontSize="12"
                                Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center"/>
                     <TextBlock x:Name="PlayerHintText" FontSize="12"
-                               Foreground="{StaticResource SuccessBrush}" Text="Nombre guardado localmente"/>
+                               Foreground="{StaticResource SuccessBrush}" Text="Nombre guardado localmente"
+                               TextWrapping="Wrap"/>
                   </StackPanel>
                 </StackPanel>
               </Border>
@@ -401,26 +404,30 @@
                     <TextBlock Text="Comportamiento de la aplicación en la sala"
                                Theme="{StaticResource T.Caption}"/>
                   </StackPanel>
-                  <Grid>
-                    <StackPanel Spacing="3" HorizontalAlignment="Left">
+                  <!-- Responsive: la etiqueta ocupa la columna elástica y el interruptor
+                       la fija, de modo que el texto se envuelve en vez de solaparse. -->
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="3" HorizontalAlignment="Left">
                       <TextBlock Text="Confirmar antes de desinstalar" FontSize="13" FontWeight="SemiBold"
-                                 Foreground="{StaticResource TextPrimaryBrush}"/>
+                                 Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap"/>
                       <TextBlock Text="Pide confirmación antes de borrar juegos instalados"
-                                 FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                 FontSize="12" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <ToggleButton x:Name="ToggleConfirmUninstall" Theme="{StaticResource SwitchToggle}"
-                                  HorizontalAlignment="Right"/>
+                    <ToggleButton x:Name="ToggleConfirmUninstall" Grid.Column="1"
+                                  Theme="{StaticResource SwitchToggle}"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center"/>
                   </Grid>
                   <Rectangle Height="1" Fill="{StaticResource BorderBrushDefault}"/>
-                  <Grid>
-                    <StackPanel Spacing="3" HorizontalAlignment="Left">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Grid.Column="0" Spacing="3" HorizontalAlignment="Left">
                       <TextBlock Text="Conexión automática" FontSize="13" FontWeight="SemiBold"
-                                 Foreground="{StaticResource TextPrimaryBrush}"/>
+                                 Foreground="{StaticResource TextPrimaryBrush}" TextWrapping="Wrap"/>
                       <TextBlock Text="Unirse al servidor de la sala al iniciar la aplicación"
-                                 FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                 FontSize="12" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <ToggleButton x:Name="ToggleAutoConnect" Theme="{StaticResource SwitchToggle}"
-                                  HorizontalAlignment="Right"/>
+                    <ToggleButton x:Name="ToggleAutoConnect" Grid.Column="1"
+                                  Theme="{StaticResource SwitchToggle}"
+                                  HorizontalAlignment="Right" VerticalAlignment="Center"/>
                   </Grid>
                 </StackPanel>
               </Border>
@@ -439,30 +446,39 @@
                     </StackPanel>
                   </StackPanel>
                   <Border Background="#144ADE80" CornerRadius="8" Padding="12,10">
-                    <Grid>
-                      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
+                    <!-- Responsive: el estado ocupa la columna elástica y el contador
+                         de juegos la fija, para que no se solapen. -->
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                      <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left">
                         <Border x:Name="ServerCardDot" Width="8" Height="8" CornerRadius="4"
                                 Background="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
                         <TextBlock x:Name="ServerCardStatus" Text="Sin conexión" FontSize="13"
-                                   FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}"/>
+                                   FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}"
+                                   TextWrapping="Wrap"/>
                       </StackPanel>
-                      <TextBlock x:Name="ServerCardGames" FontSize="12"
-                                 Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Right"/>
+                      <TextBlock x:Name="ServerCardGames" Grid.Column="1" FontSize="12"
+                                 Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Right"
+                                 VerticalAlignment="Center" TextWrapping="Wrap"/>
                     </Grid>
                   </Border>
-                  <Grid>
-                    <TextBlock Text="Servidor" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                    <TextBlock x:Name="SettingsServerName" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Grid.Column="0" Text="Servidor" FontSize="12"
+                               Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="SettingsServerName" Grid.Column="1" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"
+                               TextWrapping="Wrap"/>
                   </Grid>
-                  <Grid>
-                    <TextBlock Text="Dirección IP" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                    <TextBlock x:Name="SettingsServerAddress" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Grid.Column="0" Text="Dirección IP" FontSize="12"
+                               Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="SettingsServerAddress" Grid.Column="1" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"
+                               TextWrapping="Wrap"/>
                   </Grid>
-                  <Grid>
-                    <TextBlock Text="Puerto" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
-                    <TextBlock x:Name="SettingsServerPort" Text="8710" FontSize="13" FontWeight="SemiBold"
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <TextBlock Grid.Column="0" Text="Puerto" FontSize="12"
+                               Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="SettingsServerPort" Grid.Column="1" Text="8710" FontSize="13" FontWeight="SemiBold"
                                Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Right"/>
                   </Grid>
                   <StackPanel Spacing="6">
@@ -489,14 +505,17 @@
                     <TextBox x:Name="AddressBox" Theme="{StaticResource InputDark}" Height="40"
                              PlaceholderText="IP:puerto (ej. 10.0.0.5:8710)"/>
                   </StackPanel>
-                  <StackPanel Orientation="Horizontal" Spacing="8">
+                  <!-- Responsive: los botones se envuelven en varias lineas en vez de
+                       desbordar la tarjeta cuando la columna se estrecha. -->
+                  <WrapPanel x:Name="SettingsActionButtons" Orientation="Horizontal" ItemSpacing="8"
+                             LineSpacing="8">
                     <Button x:Name="ConnectButton" Theme="{StaticResource ButtonPrimary}" Padding="16,0"
                             Content="Conectar" Click="OnConnect"/>
                     <Button x:Name="DiscoverButton" Theme="{StaticResource ButtonSecondary}"
                             Content="Buscar en LAN" Click="OnDiscover"/>
                     <Button x:Name="TestConnectionButton" Theme="{StaticResource ButtonSecondary}"
                             Content="Probar conexión" Click="OnTestConnection"/>
-                  </StackPanel>
+                  </WrapPanel>
                   <ListBox x:Name="DiscoveredList" Background="Transparent" IsVisible="False"/>
                   <StackPanel Spacing="6">
                     <TextBlock Text="Estado" Theme="{StaticResource T.Caption}"/>
@@ -516,14 +535,16 @@
               </Button>
             </StackPanel>
             <!-- set.footer: los botones de accion ocupan todo el ancho de la seccion, para
-                 que queden alineados al borde derecho tanto en dos columnas como en una. -->
+                 que queden alineados al borde derecho tanto en dos columnas como en una.
+                 Responsive: se envuelven en varias lineas si no caben. -->
             <Grid x:Name="SettingsFooter" Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,4,0,0">
-              <StackPanel Orientation="Horizontal" Spacing="10" HorizontalAlignment="Right">
+              <WrapPanel x:Name="SettingsFooterButtons" Orientation="Horizontal" ItemSpacing="10"
+                         LineSpacing="8" HorizontalAlignment="Right">
                 <Button x:Name="ResetSettingsButton" Theme="{StaticResource ButtonSecondary}"
                         Content="Restablecer" Click="OnResetSettings"/>
                 <Button x:Name="SaveSettingsButton" Theme="{StaticResource ButtonPrimary}"
                         Content="Guardar cambios" Click="OnSaveSettings"/>
-              </StackPanel>
+              </WrapPanel>
             </Grid>
           </Grid>
         </StackPanel>

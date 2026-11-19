@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.IO;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Media;
 using Avalonia.Styling;
 using LanForge.Client.Application;
@@ -55,6 +57,10 @@ public partial class MainWindow : Window
         // Los ajustes se reparten en una o dos columnas segun el ancho disponible:
         // al redimensionar la ventana hay que recalcularlo.
         SettingsView.SizeChanged += (_, _) => UpdateSettingsLayout();
+
+        // El cromo de la ventana (barra lateral, margenes) tambien depende del
+        // ancho: al encoger la ventana se colapsa la barra lateral.
+        SizeChanged += (_, _) => UpdateResponsiveLayout();
 
         GamesGrid.ItemsSource = _cards;
         SteamList.ItemsSource = _steamGames;
@@ -193,7 +199,7 @@ public partial class MainWindow : Window
         {
             // La vista de ajustes estaba oculta: su ancho es el de antes, asi que el
             // reparto en columnas se recalcula al entrar.
-            UpdateSettingsLayout();
+            UpdateResponsiveLayout();
         }
 
         if (button == NavDownloads)
@@ -212,22 +218,43 @@ public partial class MainWindow : Window
 
     /// <summary>
     /// Ancho minimo que hace falta para las dos columnas de ajustes: la columna
-    /// izquierda (520), el hueco (16) y la derecha (360).
+    /// izquierda (520), el hueco (16) y la derecha (420).
+    ///
+    /// La derecha paso de 360 a 420 porque los tres botones de conexion
+    /// (Conectar, Buscar en LAN, Probar conexion) miden unos 361 px en total:
+    /// con 360 se salian de la tarjeta, que solo deja 320 px utiles dentro.
     /// </summary>
-    private const double SettingsTwoColumnsMinWidth = 520 + 16 + 360;
+    private const double SettingsTwoColumnsMinWidth = 520 + 16 + 420;
+
+    /// <summary>
+    /// Por debajo de este ancho de ventana la barra lateral se reduce a un riel
+    /// de iconos: con 232 px fijos, en una ventana de 375 px el area de
+    /// contenido se queda en unos 143 px y el formulario de ajustes no cabe.
+    /// </summary>
+    private const double CollapsedSidebarMinWindowWidth = 900;
+
+    /// <summary>
+    /// Ancho del riel de iconos en el que se convierte la barra lateral.
+    /// </summary>
+    private const double CollapsedSidebarWidth = 56;
+
+    /// <summary>
+    /// Margen horizontal del contenido de ajustes segun el ancho disponible.
+    /// </summary>
+    private const double SettingsMarginWide = 28;
+
+    private const double SettingsMarginNarrow = 12;
 
     /// <summary>
     /// Reparte los ajustes en dos columnas o en una, segun el ancho disponible.
     ///
-    /// Las columnas tenian ancho fijo (520 + 360 = 896 px) y la ventana puede bajar
-    /// a 1100 px, con lo que el area de contenido se queda en unos 797 px: la columna
-    /// derecha se salia del panel y los botones de accion, que vivian dentro de la
-    /// columna izquierda, quedaban a media pantalla. Con una sola columna todo cabe
-    /// y los botones siguen alineados al borde derecho de la seccion.
+    /// En dos columnas se conservan los anchos fijos que ya tenia el escritorio
+    /// (520 y 420) para que su aspecto no cambie; por debajo de ese ancho el
+    /// formulario pasa a una sola columna, que ocupa todo el ancho disponible.
     /// </summary>
     private void UpdateSettingsLayout()
     {
-        var available = SettingsView.Bounds.Width;
+        var available = SettingsAvailableWidth();
         if (available <= 0)
         {
             return;
@@ -235,13 +262,89 @@ public partial class MainWindow : Window
 
         var twoColumns = available >= SettingsTwoColumnsMinWidth;
         SettingsColumns.ColumnDefinitions = twoColumns
-            ? new Avalonia.Controls.ColumnDefinitions("520,360")
+            ? new Avalonia.Controls.ColumnDefinitions("520,420")
             : new Avalonia.Controls.ColumnDefinitions("*");
         SettingsColumns.ColumnSpacing = twoColumns ? 16 : 0;
 
         Grid.SetColumn(SettingsRightColumn, twoColumns ? 1 : 0);
         Grid.SetRow(SettingsRightColumn, twoColumns ? 0 : 1);
         Grid.SetColumnSpan(SettingsFooter, twoColumns ? 2 : 1);
+    }
+
+    /// <summary>
+    /// Ancho util para el formulario de ajustes: el ancho de la vista menos el
+    /// margen horizontal que lleva. Medir la vista entera aplicaba el margen
+    /// dos veces, y el reparto en columnas se decidiria mas tarde de la cuenta.
+    /// </summary>
+    private double SettingsAvailableWidth()
+    {
+        var width = SettingsView.Bounds.Width;
+        if (width <= 0)
+        {
+            return 0;
+        }
+
+        var margin = SettingsRoot.Margin;
+        return Math.Max(0, width - margin.Left - margin.Right);
+    }
+
+    /// <summary>
+    /// Ajusta el cromo de la ventana al ancho disponible: por debajo de
+    /// <see cref="CollapsedSidebarMinWindowWidth"/> la barra lateral se reduce a
+    /// un riel de iconos (los botones de navegacion siguen siendo accesibles)
+    /// y el contenido de ajustes pierde margen, de forma que el formulario siga
+    /// siendo usable en una ventana estrecha.
+    /// </summary>
+    private void UpdateResponsiveLayout()
+    {
+        var windowWidth = Bounds.Width;
+        if (windowWidth <= 0)
+        {
+            return;
+        }
+
+        var narrow = windowWidth < CollapsedSidebarMinWindowWidth;
+        var sidebarWidth = narrow ? CollapsedSidebarWidth : 232;
+
+        if (RootGrid.ColumnDefinitions.Count > 0 &&
+            Math.Abs(RootGrid.ColumnDefinitions[0].Width.Value - sidebarWidth) >= 0.5)
+        {
+            RootGrid.ColumnDefinitions = new Avalonia.Controls.ColumnDefinitions($"{sidebarWidth},*");
+        }
+
+        // En el riel de iconos se quitan los rótulos de la barra lateral, pero los
+        // botones se quedan: si no, no habria forma de cambiar de pantalla.
+        SidebarMenuTitle.IsVisible = !narrow;
+        SidebarBottom.IsVisible = !narrow;
+        SetNavLabel(NavCatalogText, "   Catálogo", narrow);
+        SetNavLabel(NavSteamText, "   Steam", narrow);
+        SetNavLabel(NavChatText, "   Jugadores", narrow);
+        SetNavLabel(NavDownloadsText, "   Descargas", narrow);
+        SetNavLabel(NavSettingsText, "   Ajustes", narrow);
+
+        // Los botones del menu se centran cuando solo queda el icono.
+        foreach (var button in new[] { NavCatalog, NavSteam, NavChat, NavDownloads, NavSettings })
+        {
+            button.HorizontalContentAlignment = narrow
+                ? Avalonia.Layout.HorizontalAlignment.Center
+                : Avalonia.Layout.HorizontalAlignment.Left;
+        }
+
+        var settingsMargin = narrow ? SettingsMarginNarrow : SettingsMarginWide;
+        if (Math.Abs(SettingsRoot.Margin.Left - settingsMargin) > 0.5)
+        {
+            SettingsRoot.Margin = new Thickness(settingsMargin, narrow ? 16 : 24, settingsMargin, narrow ? 16 : 24);
+        }
+
+        UpdateSettingsLayout();
+    }
+
+    /// <summary>
+    /// Muestra u oculta el rótulo de un botón de la barra lateral.
+    /// </summary>
+    private static void SetNavLabel(Run run, string text, bool hidden)
+    {
+        run.Text = hidden ? string.Empty : text;
     }
 
     private void SetActiveNav(Button button)
