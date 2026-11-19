@@ -17,7 +17,7 @@ prueban sin abrir ninguna ventana.
 | Botón de publicar | `PackageSourcePathsValidationTests`, `PackageCreateViewComponentTests` | `CanPublish` deshabilitado + el motivo visible en la vista real de Avalonia |
 | Formulario | `PackageCreateViewModelPickerTests`, `PackageCreateViewComponentTests` | Que un diálogo cancelado o con ruta inválida no guarde la ruta, que el botón se rehabilite con rutas válidas |
 | Opciones de los diálogos | `PackageCreateViewExecutablePickerTests` | Filtro `*.exe` del diálogo de ejecutables, `AllowMultiple = false`, títulos de los dos diálogos |
-| Cableado del selector nativo | `TopLevelPathPickerTests` | Vista sin ventana → `null`, diálogo sin elementos → `null`, sin excepciones en el hilo de UI |
+| Cableado del selector nativo | `TopLevelPathPickerTests` | Vista sin ventana → `null`, diálogo sin elementos → `null`, sin excepciones en el hilo de UI, traducción del elemento a ruta local |
 | Formato del payload | `PackageCreatePayloadFormatTests` | Cuerpo JSON real de la petición: carpeta absoluta, ejecutable relativo, nombres de campo del contrato |
 | Flujo completo | `PackageCreateViewManualFlowTests` | La vista real publica por HTTP contra el endpoint real y el paquete se crea |
 
@@ -79,3 +79,17 @@ vista pegada a una ventana, el diálogo devuelve una colección vacía y el
 selector la traduce a `null`. Si una versión futura del proveedor headless
 empezara a devolver elementos, esa prueba avisaría y habría que revisar cómo se
 traducen al formulario.
+
+## Nota sobre `IStorageItem`
+
+`IStorageItem` de Avalonia **no se puede implementar a mano** (el propio
+interface declara que no es implementable por código de usuario). Por eso las
+pruebas del selector no usan un doble de almacenamiento: piden el elemento al
+proveedor real con `IStorageProvider.TryGetFileFromPathAsync`, que sí funciona
+en headless y devuelve un `BclStorageFile` de verdad.
+
+Eso destapó un detalle: para una URI que no es del sistema de ficheros, el
+proveedor devuelve **null**, no un elemento con la ruta vacía. `LocalPath` lo
+traduce a `null` sin lanzar una excepción (antes el `item.Path` sin comprobación
+podía dejar caer el formulario al elegir), que es lo que el formulario
+entiende como «no se ha elegido nada».

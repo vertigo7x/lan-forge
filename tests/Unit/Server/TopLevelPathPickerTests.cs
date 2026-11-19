@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using LanForge.Server.Application;
 using LanForge.Server.ViewModels;
 using LanForge.Server.Views;
@@ -36,8 +37,12 @@ namespace LanForge.UnitTests.Server;
 /// <see cref="PackageCreateViewExecutablePickerTests"/>.
 /// </summary>
 [Collection("Cliente-UI")]
-public sealed class TopLevelPathPickerTests
+public sealed class TopLevelPathPickerTests : IDisposable
 {
+    private readonly TemporaryGameFolder _game = new();
+
+    public void Dispose() => _game.Dispose();
+
     [Fact]
     public async Task Sin_ventana_no_devuelve_ninguna_carpeta()
     {
@@ -155,6 +160,94 @@ public sealed class TopLevelPathPickerTests
         Assert.False(viewModel.HasSourceDirectoryError);
         Assert.False(viewModel.HasEntryPointError);
         Assert.False(viewModel.CanPublish);
+    }
+
+    [Fact]
+    public async Task Un_elemento_con_ruta_local_devuelve_la_ruta_tal_cual()
+    {
+        // La ruta que devuelve el dialogo es la que el servidor recibe: no se
+        // transforma ni se normaliza.
+        //
+        // El elemento sale del proveedor real de Avalonia
+        // (TryGetFileFromPathAsync): IStorageItem no se puede implementar a
+        // mano ("not implementable by user code"), asi que para tener un
+        // elemento de verdad hay que pedirselo al proveedor.
+        var item = await StorageFileAsync(_game.ExecutablePath);
+
+        var path = TopLevelPathPicker.LocalPath(item);
+
+        Assert.Equal(_game.ExecutablePath, path);
+    }
+
+    [Fact]
+    public async Task Un_elemento_sin_ruta_local_no_devuelve_ninguna_ruta()
+    {
+        // Un proveedor remoto puede devolver un elemento cuya URI no tiene ruta
+        // local. En ese caso no hay una ruta que enviar al servidor, asi que el
+        // selector devuelve null en vez de una ruta que el servidor no puede
+        // leer.
+        //
+        // MEDIDO en este entorno: al pedir al proveedor un archivo por una URI
+        // que no es del sistema de ficheros, devuelve null (no un elemento con
+        // la ruta vacia). El selector lo traduce a null.
+        var item = await StorageItemForUriAsync(new Uri("https://ejemplo.com/juego/game.exe"));
+
+        var path = TopLevelPathPicker.LocalPath(item);
+
+        Assert.Null(path);
+    }
+
+    [Fact]
+    public void Un_elemento_nulo_no_devuelve_ninguna_ruta()
+    {
+        // Si el proveedor devolviera una entrada nula, el selector no puede
+        // dejar que eso reviente el formulario al elegir.
+        var path = TopLevelPathPicker.LocalPath(null);
+
+        Assert.Null(path);
+    }
+
+    /// <summary>
+    /// Pide al proveedor de almacenamiento un elemento a partir de una ruta
+    /// local del disco.
+    /// </summary>
+    private static async Task<IStorageFile> StorageFileAsync(string path)
+    {
+        var item = await StorageItemForUriAsync(new Uri(path));
+        Assert.NotNull(item);
+        return Assert.IsAssignableFrom<IStorageFile>(item);
+    }
+
+    /// <summary>
+    /// Pide al proveedor de almacenamiento un elemento a partir de una URI. Con
+    /// la ventana ya pegada, el proveedor sabe leer del sistema de ficheros.
+    ///
+    /// Devuelve null si el proveedor no encuentra el archivo: asi se puede
+    /// comprobar tambien el caso de un elemento que no existe.
+    /// </summary>
+    private static async Task<IStorageItem?> StorageItemForUriAsync(Uri uri)
+    {
+        PackageCreateView? view = null;
+        Window? window = null;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            view = new PackageCreateView(new NoopPackageCreationService());
+            window = new Window { Content = view };
+            window.Show();
+            window.UpdateLayout();
+        });
+
+        var storage = TopLevel.GetTopLevel(view!)!.StorageProvider;
+        try
+        {
+            // El proveedor devuelve null si no encuentra el archivo (o si la
+            // URI no es del sistema de ficheros).
+            return await storage.TryGetFileFromPathAsync(uri);
+        }
+        finally
+        {
+            HeadlessAvalonia.RunOnUiThreadAndWait(window!.Close);
+        }
     }
 
     private sealed class NoopPackageCreationService : IPackageCreationService

@@ -160,10 +160,21 @@ internal sealed class TopLevelPathPicker : IPathPicker
     /// Devuelve la ruta local del elemento elegido. Los dialogos pueden devolver
     /// una URI sin ruta local (un proveedor remoto): en ese caso no hay una ruta
     /// que enviar al servidor, asi que se devuelve null.
+    ///
+    /// El elemento y su ruta pueden ser null: el proveedor puede devolver una
+    /// entrada sin ruta local (MEDIDO: al pedir un archivo por una URI que no
+    /// es del sistema de ficheros, el proveedor devuelve null). Un null ahi
+    /// haria caer el formulario al elegir, asi que se traduce a null, que es lo
+    /// que el formulario entiende como "no se ha elegido nada".
+    ///
+    /// Es interno (no privado) para que las pruebas puedan comprobarlo: es la
+    /// traduccion del elemento del dialogo a la ruta que entiende el servidor,
+    /// y en headless el dialogo no devuelve ningun elemento con el que
+    /// probarlo de otra manera.
     /// </summary>
-    private static string? LocalPath(IStorageItem item)
+    internal static string? LocalPath(IStorageItem? item)
     {
-        var localPath = item.Path.LocalPath;
+        var localPath = item?.Path?.LocalPath;
         return string.IsNullOrWhiteSpace(localPath) ? null : localPath;
     }
 }
