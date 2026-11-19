@@ -94,6 +94,17 @@ public static class PackageCreationValidator
         {
             errors[PackageCreationFields.SourceDirectory] =
                 $"La ruta de la carpeta no puede pasar de {MaxSourceDirectoryLength} caracteres.";
+            return;
+        }
+
+        // La carpeta se elige con el dialogo del sistema operativo, asi que ya
+        // existe en el momento de elegirla. Se vuelve a comprobar aqui porque el
+        // campo puede guardar la ruta de una eleccion anterior y el organizador
+        // puede moverla o borrarla antes de publicar.
+        if (!Directory.Exists(sourceDirectory))
+        {
+            errors[PackageCreationFields.SourceDirectory] =
+                PackageSourcePaths.MissingSourceDirectoryMessage;
         }
     }
 
@@ -105,14 +116,20 @@ public static class PackageCreationValidator
             return;
         }
 
-        try
+        // La extension se comprueba antes que la existencia: un archivo que no es
+        // un .exe no vale como ejecutable aunque exista.
+        if (!PackageSourcePaths.IsExecutable(entryPoint))
         {
-            ManifestFileEntry.ValidatePath(entryPoint);
+            errors[PackageCreationFields.EntryPoint] = PackageSourcePaths.NotExecutableMessage;
+            return;
         }
-        catch (ArgumentException)
+
+        // El ejecutable se elige con el dialogo de archivos, asi que existe cuando
+        // se elige. Se comprueba aqui porque la ruta guardada puede dejar de ser
+        // valida antes de publicar (el organizador puede moverla o borrarla).
+        if (!File.Exists(entryPoint))
         {
-            errors[PackageCreationFields.EntryPoint] =
-                "El ejecutable debe ser una ruta relativa dentro de la carpeta (sin '..' ni rutas absolutas).";
+            errors[PackageCreationFields.EntryPoint] = PackageSourcePaths.MissingExecutableMessage;
         }
     }
 

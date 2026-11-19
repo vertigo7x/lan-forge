@@ -8,8 +8,17 @@ namespace LanForge.UnitTests.Server;
 /// integracion con el endpoint real: envio unico, errores por campo del servidor y
 /// conservacion del mensaje del servidor al editar el campo.
 /// </summary>
-public sealed class PackageCreateViewModelEndpointTests
+public sealed class PackageCreateViewModelEndpointTests : IDisposable
 {
+    private readonly TemporaryGameFolder _game = new();
+    private readonly TemporaryGameFolder _otherGame = new();
+
+    public void Dispose()
+    {
+        _game.Dispose();
+        _otherGame.Dispose();
+    }
+
     [Fact]
     public async Task Ignora_un_segundo_envio_mientras_hay_una_peticion_en_vuelo()
     {
@@ -90,9 +99,10 @@ public sealed class PackageCreateViewModelEndpointTests
         await viewModel.SubmitAsync();
         Assert.Equal("La carpeta '/games/no-existe' no existe en el servidor.", viewModel.SourceDirectoryError);
 
-        // El usuario corrige la ruta: el cliente ya no se queja, pero el mensaje del
-        // servidor sigue siendo el dato valido hasta el siguiente envio.
-        viewModel.SourceDirectory = "/games/neon-corregido";
+        // El usuario elige otra carpeta que si existe: el cliente ya no se queja,
+        // pero el mensaje del servidor sigue siendo el dato valido hasta el
+        // siguiente envio.
+        viewModel.SourceDirectory = _otherGame.SourceDirectory;
 
         Assert.Equal("La carpeta '/games/no-existe' no existe en el servidor.", viewModel.SourceDirectoryError);
     }
@@ -165,15 +175,15 @@ public sealed class PackageCreateViewModelEndpointTests
         Assert.True(viewModel.CanSubmit);
     }
 
-    private static PackageCreateViewModel CreateValidViewModel(IPackageCreationService service)
+    private PackageCreateViewModel CreateValidViewModel(IPackageCreationService service)
     {
         return new PackageCreateViewModel(service)
         {
             GameId = "neon-drift",
             Title = "Neon Drift",
             Version = "1.2.3",
-            SourceDirectory = "/games/neon",
-            EntryPoint = "game.exe",
+            SourceDirectory = _game.SourceDirectory,
+            EntryPoint = _game.ExecutablePath,
             Arguments = "--fullscreen",
         };
     }

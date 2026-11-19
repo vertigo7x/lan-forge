@@ -13,6 +13,7 @@ namespace LanForge.Server.ViewModels;
 public sealed class PackageCreateViewModel : INotifyPropertyChanged
 {
     private readonly IPackageCreationService _service;
+    private readonly IPathPicker _pathPicker;
     private readonly ICoverUploadService? _coverUploads;
     private readonly ICoverPreviewLoader _previewLoader;
 
@@ -49,7 +50,12 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private bool _statusIsError;
 
     public PackageCreateViewModel(IPackageCreationService service)
-        : this(service, coverUploads: null, previewLoader: null)
+        : this(service, coverUploads: null, previewLoader: null, pathPicker: null)
+    {
+    }
+
+    public PackageCreateViewModel(IPackageCreationService service, IPathPicker? pathPicker)
+        : this(service, coverUploads: null, previewLoader: null, pathPicker: pathPicker)
     {
     }
 
@@ -64,12 +70,14 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     public PackageCreateViewModel(
         IPackageCreationService service,
         ICoverUploadService? coverUploads,
-        ICoverPreviewLoader? previewLoader = null)
+        ICoverPreviewLoader? previewLoader = null,
+        IPathPicker? pathPicker = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
         _coverUploads = coverUploads;
         _previewLoader = previewLoader ?? new AvaloniaCoverPreviewLoader();
+        _pathPicker = pathPicker ?? new UnavailablePathPicker();
 
         SubmitCommand = new DelegateCommand(SubmitAsync);
         ResetCommand = new DelegateCommand(() =>
@@ -77,6 +85,8 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             Reset();
             return Task.CompletedTask;
         });
+        PickSourceDirectoryCommand = new DelegateCommand(PickSourceDirectoryAsync);
+        PickEntryPointCommand = new DelegateCommand(PickEntryPointAsync);
     }
 
     // ---------- Campos del formulario ----------
@@ -227,6 +237,10 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
     public DelegateCommand ResetCommand { get; }
 
+    public DelegateCommand PickSourceDirectoryCommand { get; }
+
+    public DelegateCommand PickEntryPointCommand { get; }
+
     /// <summary>
     /// Indica si se puede enviar el formulario. Se mantiene sincronizado con
     /// <see cref="IsSubmitting"/> para que el botón se deshabilite durante el envío.
@@ -236,6 +250,44 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         get => _canSubmit;
         private set => SetField(ref _canSubmit, value, nameof(CanSubmit));
     }
+
+    /// <summary>
+    /// Indica si el formulario se puede publicar: no hay ninguna petición en
+    /// curso y la carpeta origen y el ejecutable son utilizables.
+    ///
+    /// La carpeta tiene que existir y el ejecutable tiene que existir y ser un
+    /// <c>.exe</c>. Mientras falte cualquiera de las dos, el botón de publicar
+    /// queda deshabilitado.
+    /// </summary>
+    public bool CanPublish => CanSubmit && HasValidSourcePaths;
+
+    /// <summary>
+    /// Motivo por el que no se puede publicar todavia, o null si las rutas son
+    /// utilizables.
+    ///
+    /// Es el mensaje que explica el boton deshabilitado: el organizador elige la
+    /// carpeta y el ejecutable con los dialogos, pero entre una eleccion y otra
+    /// el contenido del disco puede cambiar (el organizador puede borrar la
+    /// carpeta o mover el ejecutable). El texto sale de la misma regla que
+    /// deshabilita el boton, asi que siempre coinciden.
+    /// </summary>
+    public string? SourcePathsError => PackageSourcePaths.Validate(SourceDirectory, EntryPoint);
+
+    /// <summary>True cuando hay un motivo por el que no se puede publicar.</summary>
+    public bool HasSourcePathsError => !string.IsNullOrEmpty(SourcePathsError);
+
+    /// <summary>
+    /// True cuando la carpeta origen y el ejecutable son utilizables. Se
+    /// recalcula cada vez que se leen porque el contenido del disco puede cambiar
+    /// sin que el formulario se entere (el organizador puede borrar la carpeta
+    /// despues de elegirla).
+    ///
+    /// La regla es la de <see cref="PackageSourcePaths.Validate"/>, la misma que
+    /// usan los mensajes de los campos: el boton se deshabilita y el campo dice
+    /// por que, sin poder divergir.
+    /// </summary>
+    private bool HasValidSourcePaths =>
+        PackageSourcePaths.Validate(SourceDirectory, EntryPoint) is null;
 
     // ---------- Acciones ----------
 
@@ -334,6 +386,18 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             return;
         }
 
+        try
+        {
+            request = BuildPayloadRequest();
+        }
+        catch (ArgumentException ex)
+        {
+            EntryPointError = ex.Message;
+            StatusMessage = "Revisa los campos marcados: no se ha creado el paquete.";
+            StatusIsError = true;
+            return;
+        }
+
         if (HasCoverSelected)
         {
             var coverError = ValidateCover(CoverPath, contentType: null);
@@ -395,6 +459,85 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     {
         ResetFields();
         ClearErrors();
+        StatusMessage = null;
+        StatusIsError = false;
+    }
+
+    /// <summary>
+    /// Abre el dialogo de carpetas del sistema operativo y guarda la ruta
+    /// absoluta de la carpeta elegida. Si el usuario cancela, el campo se queda
+    /// como estaba.
+    ///
+    /// El dialogo solo deja elegir carpetas que existen, pero se comprueba
+    /// aqui tambien: un proveedor remoto puede devolver una ruta sin carpeta
+    /// local y la carpeta puede desaparecer entre la eleccion y la pulsacion.
+    /// </summary>
+    public async Task PickSourceDirectoryAsync()
+    {
+        var folder = await _pathPicker.PickFolderAsync();
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return;
+        }
+
+        var path = folder.Trim();
+        if (!Directory.Exists(path))
+        {
+            SourceDirectoryError = PackageSourcePaths.MissingSourceDirectoryMessage;
+            StatusMessage = "La carpeta elegida no existe.";
+            StatusIsError = true;
+            return;
+        }
+
+        SourceDirectory = path;
+        StatusMessage = null;
+        StatusIsError = false;
+    }
+
+    /// <summary>
+    /// Abre el dialogo de archivos del sistema operativo filtrado a <c>*.exe</c> y
+    /// guarda la ruta absoluta del ejecutable elegido. Si el usuario cancela, el
+    /// campo se queda como estaba.
+    ///
+    /// El filtro del dialogo es solo una comodidad: aqui se comprueba la extension
+    /// y la existencia para que el campo no guarde un archivo que no vale como
+    /// ejecutable. Las dos reglas son las de
+    /// <see cref="PackageSourcePaths.Validate"/>, las mismas que deshabilitan el
+    /// boton de publicar.
+    /// </summary>
+    public async Task PickEntryPointAsync()
+    {
+        var executable = await _pathPicker.PickExecutableAsync();
+        if (string.IsNullOrWhiteSpace(executable))
+        {
+            return;
+        }
+
+        var path = executable.Trim();
+
+        // La extension se comprueba antes que la existencia: un archivo que no es
+        // un .exe no vale como ejecutable aunque exista.
+        if (!PackageSourcePaths.IsExecutable(path))
+        {
+            EntryPointError = PackageSourcePaths.NotExecutableMessage;
+            StatusMessage = "El archivo elegido no es un ejecutable de Windows.";
+            StatusIsError = true;
+            return;
+        }
+
+        // El dialogo del sistema operativo solo deja elegir archivos que existen,
+        // pero un proveedor puede devolver una ruta que no esta en el disco: esa
+        // ruta no se guarda en el campo.
+        if (!File.Exists(path))
+        {
+            EntryPointError = PackageSourcePaths.MissingExecutableMessage;
+            StatusMessage = "El ejecutable elegido no existe.";
+            StatusIsError = true;
+            return;
+        }
+
+        EntryPoint = path;
+        EntryPointError = null;
         StatusMessage = null;
         StatusIsError = false;
     }
@@ -475,6 +618,31 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim());
 
     /// <summary>
+    /// Monta la peticion que se envia al servidor.
+    ///
+    /// La carpeta origen se envia tal cual (ruta absoluta del servidor) y el
+    /// ejecutable se convierte a ruta relativa dentro de esa carpeta: es lo que
+    /// espera el payload del endpoint y lo que el cliente resuelve contra el
+    /// directorio de instalacion del juego.
+    ///
+    /// Lanza <see cref="ArgumentException"/> si el ejecutable no esta dentro de
+    /// la carpeta origen.
+    /// </summary>
+    private PackageCreationRequest BuildPayloadRequest()
+    {
+        var sourceDirectory = SourceDirectory.Trim();
+        var entryPoint = PackageSourcePaths.ToPackageRelativePath(sourceDirectory, EntryPoint.Trim());
+
+        return new(
+            GameId.Trim(),
+            Title.Trim(),
+            Version.Trim(),
+            sourceDirectory,
+            entryPoint,
+            string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim());
+    }
+
+    /// <summary>
     /// Muestra los errores de la validación de cliente. No toca los errores del
     /// servidor: todavia no se ha enviado nada.
     /// </summary>
@@ -522,6 +690,18 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
         field = value;
         OnPropertyChanged(propertyName);
+
+        if (propertyName is nameof(SourceDirectory) or nameof(EntryPoint))
+        {
+            OnPropertyChanged(nameof(CanPublish));
+            OnPropertyChanged(nameof(SourcePathsError));
+            OnPropertyChanged(nameof(HasSourcePathsError));
+        }
+
+        if (propertyName is nameof(CanSubmit))
+        {
+            OnPropertyChanged(nameof(CanPublish));
+        }
 
         // Si el campo ya tenía un error, se vuelve a validar al editarlo para que
         // el mensaje refleje el valor actual.

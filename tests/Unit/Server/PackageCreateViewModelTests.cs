@@ -3,8 +3,12 @@ using LanForge.Server.ViewModels;
 
 namespace LanForge.UnitTests.Server;
 
-public sealed class PackageCreateViewModelTests
+public sealed class PackageCreateViewModelTests : IDisposable
 {
+    private readonly TemporaryGameFolder _game = new();
+
+    public void Dispose() => _game.Dispose();
+
     [Fact]
     public async Task SubmitAsync_invalida_en_cliente_y_no_llama_al_servicio()
     {
@@ -35,7 +39,7 @@ public sealed class PackageCreateViewModelTests
         Assert.Equal("neon-drift", request.GameId);
         Assert.Equal("Neon Drift", request.Title);
         Assert.Equal("1.2.3", request.Version);
-        Assert.Equal("/games/neon", request.SourceDirectory);
+        Assert.Equal(_game.SourceDirectory, request.SourceDirectory);
         Assert.Equal("game.exe", request.EntryPoint);
         Assert.Equal("--fullscreen", request.Arguments);
     }
@@ -98,15 +102,15 @@ public sealed class PackageCreateViewModelTests
         Assert.True(viewModel.CanSubmit);
     }
 
-    private static PackageCreateViewModel CreateValidViewModel(IPackageCreationService service)
+    private PackageCreateViewModel CreateValidViewModel(IPackageCreationService service)
     {
         var viewModel = new PackageCreateViewModel(service)
         {
             GameId = "neon-drift",
             Title = "Neon Drift",
             Version = "1.2.3",
-            SourceDirectory = "/games/neon",
-            EntryPoint = "game.exe",
+            SourceDirectory = _game.SourceDirectory,
+            EntryPoint = _game.ExecutablePath,
             Arguments = "--fullscreen",
         };
         return viewModel;

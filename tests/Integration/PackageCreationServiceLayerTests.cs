@@ -46,13 +46,17 @@ public sealed class PackageCreationServiceLayerTests : IDisposable
 
         // La vista y el view model solo dependen de la interfaz: se puede
         // construir el formulario con el servicio resuelto del contenedor.
+        //
+        // El ejecutable se indica con su ruta absoluta, como lo deja el dialogo
+        // de archivos del sistema operativo: el formulario lo convierte a la ruta
+        // relativa que espera el endpoint.
         var viewModel = new PackageCreateViewModel(service)
         {
             GameId = "neon-drift",
             Title = "Neon Drift",
             Version = "1.0.0",
             SourceDirectory = source,
-            EntryPoint = "run.exe",
+            EntryPoint = Path.Combine(source, "run.exe"),
         };
 
         await viewModel.SubmitAsync();
@@ -75,11 +79,12 @@ public sealed class PackageCreationServiceLayerTests : IDisposable
         using var provider = services.BuildServiceProvider();
 
         var viewModel = new PackageCreateViewModel(provider.GetRequiredService<IPackageCreationService>());
+        var source = _temp.CreateSourceDirectory(("juego.exe", "fake-binary"));
         viewModel.GameId = "neon-drift";
         viewModel.Title = "Neon Drift";
         viewModel.Version = "1.0.0";
-        viewModel.SourceDirectory = "/srv/juegos/neon-drift";
-        viewModel.EntryPoint = "juego.exe";
+        viewModel.SourceDirectory = source;
+        viewModel.EntryPoint = Path.Combine(source, "juego.exe");
 
         await viewModel.SubmitAsync();
 

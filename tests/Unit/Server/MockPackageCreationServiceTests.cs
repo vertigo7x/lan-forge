@@ -8,10 +8,18 @@ namespace LanForge.UnitTests.Server;
 /// el mock reproduce el contrato que cumplirá el cliente HTTP real: latencia,
 /// éxito, errores de validación por campo y sustitución transparente.
 /// </summary>
-public sealed class MockPackageCreationServiceTests
+public sealed class MockPackageCreationServiceTests : IDisposable
 {
-    private static PackageCreationRequest ValidRequest(string gameId = "neon-drift") =>
-        new(gameId, "Neon Drift", "1.0.0", "/srv/juegos/neon-drift", "juego.exe", "--fullscreen");
+    private readonly TemporaryGameFolder _game = new();
+
+    public void Dispose() => _game.Dispose();
+
+    /// <summary>
+    /// Peticion valida: la carpeta y el ejecutable existen de verdad porque el
+    /// validador del formulario comprueba que ambas rutas esten en el disco.
+    /// </summary>
+    private PackageCreationRequest ValidRequest(string gameId = "neon-drift") =>
+        new(gameId, "Neon Drift", "1.0.0", _game.SourceDirectory, _game.ExecutablePath, "--fullscreen");
 
     [Fact]
     public async Task Devuelve_exito_para_una_peticion_valida()
