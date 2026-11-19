@@ -32,10 +32,11 @@ public sealed class PackageCreateViewModelCoverTests
     }
 
     [Fact]
-    public void Una_imagen_que_no_se_puede_decodificar_no_invalida_la_seleccion()
+    public void Seleccionar_un_png_renombrado_con_contenido_no_imagen_muestra_un_error()
     {
         using var temp = new TempDirectory();
         var image = CreateImage(temp, "portada.png");
+        File.WriteAllText(image, "esto no es una imagen");
         var loader = new RecordingPreviewLoader();
         var viewModel = new PackageCreateViewModel(
             new RecordingPackageCreationService(),
@@ -44,11 +45,10 @@ public sealed class PackageCreateViewModelCoverTests
 
         var error = viewModel.SelectCover(image, "image/png");
 
-        // El formato y el tamaño validos: se puede adjuntar aunque no se previsualice.
-        Assert.Null(error);
-        Assert.True(viewModel.HasCoverSelected);
+        Assert.NotNull(error);
+        Assert.False(viewModel.HasCoverSelected);
         Assert.Null(viewModel.CoverPreview);
-        Assert.Single(loader.Requests);
+        Assert.Empty(loader.Requests);
     }
 
     [Fact]
@@ -121,11 +121,26 @@ public sealed class PackageCreateViewModelCoverTests
     }
 
     [Fact]
+    public void Limpiar_la_seleccion_borra_el_temporal_que_posee_el_formulario()
+    {
+        using var temp = new TempDirectory();
+        var image = CreateImage(temp, "portada.png");
+        var temporary = Path.Combine(Path.GetTempPath(), $"lanforge-cover-{Guid.NewGuid():n}.png");
+        File.Copy(image, temporary);
+        var viewModel = new PackageCreateViewModel(new RecordingPackageCreationService());
+
+        viewModel.SelectTemporaryCover(temporary, "image/png");
+        viewModel.ClearCover();
+
+        Assert.False(File.Exists(temporary));
+    }
+
+    [Fact]
     public void Se_puede_sustituir_la_imagen_por_otra()
     {
         using var temp = new TempDirectory();
         var first = CreateImage(temp, "primera.png");
-        var second = CreateImage(temp, "segunda.jpg");
+        var second = CreateImage(temp, "segunda.png");
         var viewModel = new PackageCreateViewModel(new RecordingPackageCreationService());
 
         viewModel.SelectCover(first, "image/png");

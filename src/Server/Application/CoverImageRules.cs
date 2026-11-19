@@ -71,4 +71,56 @@ public static class CoverImageRules
 
         return null;
     }
+
+    /// <summary>
+    /// Valida los metadatos y la firma binaria de una imagen local. El tipo MIME y
+    /// la extensión son datos declarados por el proveedor del fichero; la firma es
+    /// la comprobación que impide que un contenido arbitrario renombrado termine en
+    /// el almacén de portadas.
+    /// </summary>
+    public static string? ValidateFile(string filePath, string? contentType = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
+
+        try
+        {
+            var info = new FileInfo(filePath);
+            if (!info.Exists)
+            {
+                return "El fichero de la imagen no existe.";
+            }
+
+            var metadataError = Validate(info.Name, contentType, info.Length);
+            if (metadataError is not null)
+            {
+                return metadataError;
+            }
+
+            Span<byte> header = stackalloc byte[12];
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            var read = stream.Read(header);
+            if (!HasExpectedSignature(Path.GetExtension(info.Name), header[..read]))
+            {
+                return "El contenido del fichero no es una imagen valida del formato indicado.";
+            }
+
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return "No se ha podido leer el fichero de la imagen.";
+        }
+    }
+
+    private static bool HasExpectedSignature(string extension, ReadOnlySpan<byte> header) =>
+        extension.ToLowerInvariant() switch
+        {
+            ".png" => header.Length >= 8 &&
+                      header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47 &&
+                      header[4] == 0x0d && header[5] == 0x0a && header[6] == 0x1a && header[7] == 0x0a,
+            ".jpg" or ".jpeg" => header.Length >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff,
+            ".webp" => header.Length >= 12 && header[..4].SequenceEqual("RIFF"u8) && header[8..12].SequenceEqual("WEBP"u8),
+            _ => false,
+        };
+
 }

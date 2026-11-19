@@ -43,8 +43,7 @@ public sealed class CatalogCoverUploadService : ICoverUploadService
             throw new FileNotFoundException("El fichero de la imagen ya no existe.", imagePath);
         }
 
-        var info = new FileInfo(imagePath);
-        var error = CoverImageRules.Validate(info.Name, null, info.Length);
+        var error = CoverImageRules.ValidateFile(imagePath);
         if (error is not null)
         {
             throw new ArgumentException(error, nameof(imagePath));

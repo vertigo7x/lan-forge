@@ -85,6 +85,30 @@ public sealed class CoverImageRulesTests
     }
 
     [Fact]
+    public void Rechaza_un_fichero_renombrado_como_png_cuyo_contenido_no_es_una_imagen()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "portada.png");
+        File.WriteAllText(path, "esto no es una imagen");
+
+        var error = CoverImageRules.ValidateFile(path, contentType: null);
+
+        Assert.NotNull(error);
+        Assert.Contains("contenido", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task La_copia_temporal_rechaza_y_no_devuelve_ruta_si_supera_el_limite()
+    {
+        await using var source = new MemoryStream(new byte[CoverImageRules.MaxSizeBytes + 1]);
+
+        var (path, error) = await CoverTemporaryFile.CopyFromAsync(source, "portada.png");
+
+        Assert.Null(path);
+        Assert.Contains("5 MB", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void El_tamano_maximo_es_de_cinco_megabytes()
     {
         Assert.Equal(5 * 1024 * 1024, CoverImageRules.MaxSizeBytes);

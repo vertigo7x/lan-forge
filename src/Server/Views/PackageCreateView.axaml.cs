@@ -91,14 +91,21 @@ public partial class PackageCreateView : UserControl
             return;
         }
 
-        var localPath = await ResolveLocalPathAsync(file);
+        var (localPath, error, isTemporary) = await ResolveLocalPathAsync(file);
         if (localPath is null)
         {
-            ViewModel.SelectCover(null);
+            ViewModel.ReportCoverSelectionError(error ?? "No se ha podido leer el fichero de la imagen.");
             return;
         }
 
-        ViewModel.SelectCover(localPath);
+        if (isTemporary)
+        {
+            ViewModel.SelectTemporaryCover(localPath);
+        }
+        else
+        {
+            ViewModel.SelectCover(localPath);
+        }
     }
 
     /// <summary>
@@ -106,48 +113,25 @@ public partial class PackageCreateView : UserControl
     /// selector; si no, se copia el contenido a un temporal para poder validarlo
     /// (tamano) y adjuntarlo.
     /// </summary>
-    private static async Task<string?> ResolveLocalPathAsync(IStorageFile file)
+    private static async Task<(string? Path, string? Error, bool IsTemporary)> ResolveLocalPathAsync(IStorageFile file)
     {
         var localPath = file.Path.LocalPath;
         if (!string.IsNullOrWhiteSpace(localPath) && File.Exists(localPath))
         {
-            return localPath;
+            return (localPath, null, false);
         }
 
         // Sin ruta local: se vuelca el contenido en un temporal. El nombre conserva
         // la extension, que es lo que decide si la imagen es valida.
-        var extension = Path.GetExtension(file.Name);
-        var temporary = Path.Combine(Path.GetTempPath(), $"lanforge-cover-{Guid.NewGuid():n}{extension}");
         try
         {
             await using var source = await file.OpenReadAsync();
-            await using var target = File.Create(temporary);
-            await source.CopyToAsync(target);
-            return temporary;
+            var (temporary, error) = await CoverTemporaryFile.CopyFromAsync(source, file.Name);
+            return (temporary, error, temporary is not null);
         }
         catch (Exception)
         {
-            TryDelete(temporary);
-            return null;
-        }
-    }
-
-    private static void TryDelete(string path)
-    {
-        try
-        {
-            if (File.Exists(path))
-            {
-                File.Delete(path);
-            }
-        }
-        catch (IOException)
-        {
-            // El temporal se limpia al reiniciar el sistema: no es grave.
-        }
-        catch (UnauthorizedAccessException)
-        {
-            // Idem: el temporal se queda, pero no rompe el formulario.
+            return (null, "No se ha podido leer el fichero de la imagen.", false);
         }
     }
 

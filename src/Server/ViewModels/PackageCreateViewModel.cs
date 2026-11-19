@@ -23,6 +23,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private string _entryPoint = string.Empty;
     private string _arguments = string.Empty;
     private string _coverPath = string.Empty;
+    private string? _temporaryCoverPath;
 
     private string? _gameIdError;
     private string? _titleError;
@@ -265,19 +266,50 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         }
 
         CoverPathError = null;
+        DeleteTemporaryCover();
         CoverPath = filePath;
         CoverPreview = TryLoadPreview(filePath);
         OnPropertyChanged(nameof(HasCoverSelected));
         return null;
     }
 
+    /// <summary>Registra un temporal creado para un proveedor sin ruta local.</summary>
+    public string? SelectTemporaryCover(string temporaryPath, string? contentType = null)
+    {
+        var error = SelectCover(temporaryPath, contentType);
+        if (error is null && HasCoverSelected)
+        {
+            _temporaryCoverPath = temporaryPath;
+        }
+        else
+        {
+            CoverTemporaryFile.TryDelete(temporaryPath);
+        }
+
+        return error;
+    }
+
+    /// <summary>Muestra un error de selección y descarta cualquier portada temporal anterior.</summary>
+    public void ReportCoverSelectionError(string error)
+    {
+        ClearCover();
+        CoverPathError = error;
+    }
+
     /// <summary>Quita la imagen de portada seleccionada y su previsualizacion.</summary>
     public void ClearCover()
     {
+        DeleteTemporaryCover();
         CoverPath = string.Empty;
         CoverPathError = null;
         CoverPreview = null;
         OnPropertyChanged(nameof(HasCoverSelected));
+    }
+
+    private void DeleteTemporaryCover()
+    {
+        CoverTemporaryFile.TryDelete(_temporaryCoverPath);
+        _temporaryCoverPath = null;
     }
 
     /// <summary>
@@ -391,7 +423,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
                 return "El fichero de la imagen no existe.";
             }
 
-            return CoverImageRules.Validate(info.Name, contentType, info.Length);
+            return CoverImageRules.ValidateFile(filePath, contentType);
         }
         catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
         {
