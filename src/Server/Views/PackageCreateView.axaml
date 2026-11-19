@@ -51,10 +51,18 @@
 
           <StackPanel Spacing="4">
             <TextBlock Text="Carpeta origen *" FontWeight="SemiBold"/>
-            <TextBox x:Name="SourceDirectoryBox"
-                     Text="{Binding SourceDirectory, Mode=TwoWay}"
-                     MaxLength="4096"
-                     PlaceholderText="C:\Juegos\neon-drift"/>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox x:Name="SourceDirectoryBox"
+                       Grid.Column="0"
+                       Text="{Binding SourceDirectory, Mode=TwoWay}"
+                       MaxLength="4096"
+                       IsReadOnly="True"
+                       PlaceholderText="Elige la carpeta del juego portable"/>
+              <Button x:Name="PickSourceDirectoryButton"
+                      Grid.Column="1"
+                      Content="Examinar…"
+                      Command="{Binding PickSourceDirectoryCommand}"/>
+            </Grid>
             <TextBlock x:Name="SourceDirectoryErrorText"
                        Text="{Binding SourceDirectoryError}"
                        Foreground="#F87171"
@@ -63,9 +71,17 @@
 
           <StackPanel Spacing="4">
             <TextBlock Text="Ejecutable *" FontWeight="SemiBold"/>
-            <TextBox x:Name="EntryPointBox"
-                     Text="{Binding EntryPoint, Mode=TwoWay}"
-                     PlaceholderText="game.exe"/>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+              <TextBox x:Name="EntryPointBox"
+                       Grid.Column="0"
+                       Text="{Binding EntryPoint, Mode=TwoWay}"
+                       IsReadOnly="True"
+                       PlaceholderText="Elige el ejecutable (.exe)"/>
+              <Button x:Name="PickEntryPointButton"
+                      Grid.Column="1"
+                      Content="Examinar…"
+                      Command="{Binding PickEntryPointCommand}"/>
+            </Grid>
             <TextBlock x:Name="EntryPointErrorText"
                        Text="{Binding EntryPointError}"
                        Foreground="#F87171"
@@ -96,7 +112,7 @@
         <Button x:Name="PublishButton"
                 Content="Crear paquete"
                 Command="{Binding SubmitCommand}"
-                IsEnabled="{Binding CanSubmit}"/>
+                IsEnabled="{Binding CanPublish}"/>
       </StackPanel>
     </StackPanel>
   </ScrollViewer>

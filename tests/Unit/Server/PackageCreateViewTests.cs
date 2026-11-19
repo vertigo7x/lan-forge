@@ -15,8 +15,12 @@ namespace LanForge.UnitTests.Server;
 /// compartido por toda la aplicación.
 /// </summary>
 [Collection("Cliente-UI")]
-public sealed class PackageCreateViewTests(HeadlessServerFixture fixture)
+public sealed class PackageCreateViewTests(HeadlessServerFixture fixture) : IDisposable
 {
+    private readonly TemporaryGameFolder _game = new();
+
+    public void Dispose() => _game.Dispose();
+
     [Fact]
     public void El_formulario_muestra_todos_los_campos_del_paquete()
     {
@@ -56,8 +60,8 @@ public sealed class PackageCreateViewTests(HeadlessServerFixture fixture)
             "neon-drift",
             "Neon Drift",
             "1.2.3",
-            "/games/neon",
-            "game.exe",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
             "--fullscreen"));
 
         // El envio se hace en el hilo de UI: al cambiar el estado del view model se

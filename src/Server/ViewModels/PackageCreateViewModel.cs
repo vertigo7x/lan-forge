@@ -12,6 +12,7 @@ namespace LanForge.Server.ViewModels;
 public sealed class PackageCreateViewModel : INotifyPropertyChanged
 {
     private readonly IPackageCreationService _service;
+    private readonly IPathPicker _pathPicker;
 
     private string _gameId = string.Empty;
     private string _title = string.Empty;
@@ -40,10 +41,11 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private string? _statusMessage;
     private bool _statusIsError;
 
-    public PackageCreateViewModel(IPackageCreationService service)
+    public PackageCreateViewModel(IPackageCreationService service, IPathPicker? pathPicker = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
+        _pathPicker = pathPicker ?? new UnavailablePathPicker();
 
         SubmitCommand = new DelegateCommand(SubmitAsync);
         ResetCommand = new DelegateCommand(() =>
@@ -51,6 +53,8 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             Reset();
             return Task.CompletedTask;
         });
+        PickSourceDirectoryCommand = new DelegateCommand(PickSourceDirectoryAsync);
+        PickEntryPointCommand = new DelegateCommand(PickEntryPointAsync);
     }
 
     // ---------- Campos del formulario ----------
@@ -147,7 +151,17 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     public bool IsSubmitting
     {
         get => _isSubmitting;
-        private set => SetField(ref _isSubmitting, value, nameof(IsSubmitting));
+        private set
+        {
+            if (_isSubmitting == value)
+            {
+                return;
+            }
+
+            _isSubmitting = value;
+            OnPropertyChanged(nameof(IsSubmitting));
+            OnPropertyChanged(nameof(CanPublish));
+        }
     }
 
     /// <summary>Mensaje general del formulario (éxito o error no ligado a un campo).</summary>
@@ -170,14 +184,57 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
     public DelegateCommand ResetCommand { get; }
 
+    /// <summary>Abre el dialogo de carpetas del sistema operativo.</summary>
+    public DelegateCommand PickSourceDirectoryCommand { get; }
+
+    /// <summary>Abre el dialogo de archivos del sistema operativo filtrado a .exe.</summary>
+    public DelegateCommand PickEntryPointCommand { get; }
+
     /// <summary>
-    /// Indica si se puede enviar el formulario. Se mantiene sincronizado con
-    /// <see cref="IsSubmitting"/> para que el botón se deshabilite durante el envío.
+    /// Indica si se puede enviar el formulario. Se deshabilita durante el envío.
+    ///
+    /// El botón de la vista no usa esta propiedad directamente: usa
+    /// <see cref="CanPublish"/>, que además comprueba que la carpeta y el
+    /// ejecutable elegidos sean utilizables.
     /// </summary>
     public bool CanSubmit
     {
         get => _canSubmit;
         private set => SetField(ref _canSubmit, value, nameof(CanSubmit));
+    }
+
+    /// <summary>
+    /// Indica si el formulario se puede publicar: no hay ninguna petición en
+    /// curso y la carpeta origen y el ejecutable son utilizables.
+    ///
+    /// La carpeta tiene que existir y el ejecutable tiene que existir y ser un
+    /// <c>.exe</c>. Mientras falte cualquiera de las dos, el botón de publicar
+    /// queda deshabilitado.
+    /// </summary>
+    public bool CanPublish => CanSubmit && HasValidSourcePaths;
+
+    /// <summary>
+    /// True cuando la carpeta origen y el ejecutable son utilizables. Se
+    /// recalcula cada vez que se leen porque el contenido del disco puede cambiar
+    /// sin que el formulario se entere (el organizador puede borrar la carpeta
+    /// despues de elegirla).
+    /// </summary>
+    private bool HasValidSourcePaths
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SourceDirectory) || !Directory.Exists(SourceDirectory))
+            {
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(EntryPoint) || !PackageSourcePaths.IsExecutable(EntryPoint))
+            {
+                return false;
+            }
+
+            return File.Exists(EntryPoint);
+        }
     }
 
     // ---------- Acciones ----------
@@ -194,11 +251,30 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         }
 
         ClearErrors();
-        var request = BuildRequest();
-        var clientErrors = PackageCreationValidator.Validate(request);
+
+        // La validacion se hace sobre lo que el organizador ha elegido: la ruta
+        // absoluta de la carpeta y la del ejecutable. Son las rutas que se
+        // comprueban contra el disco.
+        var clientErrors = PackageCreationValidator.Validate(BuildFormRequest());
         if (clientErrors.Count > 0)
         {
             ApplyClientErrors(clientErrors);
+            StatusMessage = "Revisa los campos marcados: no se ha creado el paquete.";
+            StatusIsError = true;
+            return;
+        }
+
+        // El payload lleva la ruta del ejecutable relativa a la carpeta origen.
+        // Si la conversion falla (el ejecutable esta fuera de la carpeta), el
+        // formulario no se envia y el error se muestra en su campo.
+        PackageCreationRequest request;
+        try
+        {
+            request = BuildPayloadRequest();
+        }
+        catch (ArgumentException ex)
+        {
+            EntryPointError = ex.Message;
             StatusMessage = "Revisa los campos marcados: no se ha creado el paquete.";
             StatusIsError = true;
             return;
@@ -245,6 +321,56 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         StatusIsError = false;
     }
 
+    /// <summary>
+    /// Abre el dialogo de carpetas del sistema operativo y guarda la ruta
+    /// absoluta de la carpeta elegida. Si el usuario cancela, el campo se queda
+    /// como estaba.
+    /// </summary>
+    public async Task PickSourceDirectoryAsync()
+    {
+        var folder = await _pathPicker.PickFolderAsync();
+        if (string.IsNullOrWhiteSpace(folder))
+        {
+            return;
+        }
+
+        SourceDirectory = folder.Trim();
+        StatusMessage = null;
+        StatusIsError = false;
+    }
+
+    /// <summary>
+    /// Abre el dialogo de archivos del sistema operativo filtrado a <c>*.exe</c> y
+    /// guarda la ruta absoluta del ejecutable elegido. Si el usuario cancela, el
+    /// campo se queda como estaba.
+    ///
+    /// El filtro del dialogo es solo una comodidad: aqui se comprueba la extension
+    /// para que el campo no guarde un archivo que no vale como ejecutable.
+    /// </summary>
+    public async Task PickEntryPointAsync()
+    {
+        var executable = await _pathPicker.PickExecutableAsync();
+        if (string.IsNullOrWhiteSpace(executable))
+        {
+            return;
+        }
+
+        var path = executable.Trim();
+        if (!PackageSourcePaths.IsExecutable(path))
+        {
+            EntryPointError =
+                $"El ejecutable tiene que ser un archivo '{PackageSourcePaths.ExecutableExtension}'.";
+            StatusMessage = "El archivo elegido no es un ejecutable de Windows.";
+            StatusIsError = true;
+            return;
+        }
+
+        EntryPoint = path;
+        EntryPointError = null;
+        StatusMessage = null;
+        StatusIsError = false;
+    }
+
     private void ResetFields()
     {
         GameId = string.Empty;
@@ -255,7 +381,13 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         Arguments = string.Empty;
     }
 
-    private PackageCreationRequest BuildRequest() =>
+    /// <summary>
+    /// Monta la peticion con lo que hay escrito en el formulario, sin transformar
+    /// las rutas. Es la peticion que se valida en cliente: la carpeta y el
+    /// ejecutable se comprueban contra el disco con las rutas absolutas que ha
+    /// elegido el organizador.
+    /// </summary>
+    private PackageCreationRequest BuildFormRequest() =>
         new(
             GameId.Trim(),
             Title.Trim(),
@@ -263,6 +395,31 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             SourceDirectory.Trim(),
             EntryPoint.Trim(),
             string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim());
+
+    /// <summary>
+    /// Monta la peticion que se envia al servidor.
+    ///
+    /// La carpeta origen se envia tal cual (ruta absoluta del servidor) y el
+    /// ejecutable se convierte a ruta relativa dentro de esa carpeta: es lo que
+    /// espera el payload del endpoint y lo que el cliente resuelve contra el
+    /// directorio de instalacion del juego.
+    ///
+    /// Lanza <see cref="ArgumentException"/> si el ejecutable no esta dentro de
+    /// la carpeta origen.
+    /// </summary>
+    private PackageCreationRequest BuildPayloadRequest()
+    {
+        var sourceDirectory = SourceDirectory.Trim();
+        var entryPoint = PackageSourcePaths.ToPackageRelativePath(sourceDirectory, EntryPoint.Trim());
+
+        return new(
+            GameId.Trim(),
+            Title.Trim(),
+            Version.Trim(),
+            sourceDirectory,
+            entryPoint,
+            string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim());
+    }
 
     /// <summary>
     /// Muestra los errores de la validación de cliente. No toca los errores del
@@ -312,6 +469,20 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         field = value;
         OnPropertyChanged(propertyName);
 
+        // El boton de publicar depende de las rutas elegidas: al cambiarlas hay
+        // que avisar de que su estado puede haber cambiado.
+        if (propertyName is nameof(SourceDirectory) or nameof(EntryPoint))
+        {
+            OnPropertyChanged(nameof(CanPublish));
+        }
+
+        // CanPublish depende de CanSubmit: si el envio arranca o termina, el
+        // estado del boton puede cambiar.
+        if (propertyName is nameof(CanSubmit))
+        {
+            OnPropertyChanged(nameof(CanPublish));
+        }
+
         // Si el campo ya tenía un error, se vuelve a validar al editarlo para que
         // el mensaje refleje el valor actual.
         if (HasErrorFor(propertyName))
@@ -328,7 +499,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     /// </summary>
     private void RefreshFieldError(string? propertyName)
     {
-        var clientErrors = PackageCreationValidator.Validate(BuildRequest());
+        var clientErrors = PackageCreationValidator.Validate(BuildFormRequest());
         var fieldKey = FieldKeyFor(propertyName);
         if (fieldKey is null)
         {
