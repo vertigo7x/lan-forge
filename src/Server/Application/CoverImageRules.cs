@@ -1,3 +1,5 @@
+using SkiaSharp;
+
 namespace LanForge.Server.Application;
 
 /// <summary>
@@ -73,10 +75,10 @@ public static class CoverImageRules
     }
 
     /// <summary>
-    /// Valida los metadatos y la firma binaria de una imagen local. El tipo MIME y
-    /// la extensión son datos declarados por el proveedor del fichero; la firma es
-    /// la comprobación que impide que un contenido arbitrario renombrado termine en
-    /// el almacén de portadas.
+    /// Valida los metadatos y decodifica una imagen local completa. El tipo MIME y
+    /// la extensión son datos declarados por el proveedor del fichero; la
+    /// decodificación comprueba los datos reales y rechaza contenido truncado o
+    /// forjado sin requerir la plataforma de render de Avalonia.
     /// </summary>
     public static string? ValidateFile(string filePath, string? contentType = null)
     {
@@ -96,10 +98,14 @@ public static class CoverImageRules
                 return metadataError;
             }
 
-            Span<byte> header = stackalloc byte[12];
-            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            var read = stream.Read(header);
-            if (!HasExpectedSignature(Path.GetExtension(info.Name), header[..read]))
+            using var codec = SKCodec.Create(filePath);
+            if (codec is null || !MatchesExtension(Path.GetExtension(info.Name), codec.EncodedFormat))
+            {
+                return "El contenido del fichero no es una imagen valida del formato indicado.";
+            }
+
+            using var bitmap = SKBitmap.Decode(filePath);
+            if (bitmap is null)
             {
                 return "El contenido del fichero no es una imagen valida del formato indicado.";
             }
@@ -112,14 +118,12 @@ public static class CoverImageRules
         }
     }
 
-    private static bool HasExpectedSignature(string extension, ReadOnlySpan<byte> header) =>
+    private static bool MatchesExtension(string extension, SKEncodedImageFormat decodedFormat) =>
         extension.ToLowerInvariant() switch
         {
-            ".png" => header.Length >= 8 &&
-                      header[0] == 0x89 && header[1] == 0x50 && header[2] == 0x4e && header[3] == 0x47 &&
-                      header[4] == 0x0d && header[5] == 0x0a && header[6] == 0x1a && header[7] == 0x0a,
-            ".jpg" or ".jpeg" => header.Length >= 3 && header[0] == 0xff && header[1] == 0xd8 && header[2] == 0xff,
-            ".webp" => header.Length >= 12 && header[..4].SequenceEqual("RIFF"u8) && header[8..12].SequenceEqual("WEBP"u8),
+            ".png" => decodedFormat == SKEncodedImageFormat.Png,
+            ".jpg" or ".jpeg" => decodedFormat == SKEncodedImageFormat.Jpeg,
+            ".webp" => decodedFormat == SKEncodedImageFormat.Webp,
             _ => false,
         };
 

@@ -52,6 +52,30 @@ public sealed class PackageCreateViewModelCoverTests
     }
 
     [Fact]
+    public void Seleccionar_un_png_con_cabecera_valida_pero_cuerpo_truncado_muestra_un_error()
+    {
+        using var temp = new TempDirectory();
+        var image = Path.Combine(temp.Path, "portada.png");
+        File.WriteAllBytes(image,
+        [
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x00,
+        ]);
+        var loader = new RecordingPreviewLoader();
+        var viewModel = new PackageCreateViewModel(
+            new RecordingPackageCreationService(),
+            coverUploads: null,
+            previewLoader: loader);
+
+        var error = viewModel.SelectCover(image, "image/png");
+
+        Assert.NotNull(error);
+        Assert.False(viewModel.HasCoverSelected);
+        Assert.True(viewModel.HasCoverPathError);
+        Assert.Empty(loader.Requests);
+    }
+
+    [Fact]
     public void Seleccionar_un_fichero_que_no_es_una_imagen_muestra_el_error_y_no_selecciona()
     {
         using var temp = new TempDirectory();

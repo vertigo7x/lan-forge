@@ -139,6 +139,40 @@ public sealed class PackageCreateCoverTests : IDisposable
         await Assert.ThrowsAsync<ArgumentException>(() => coverUploads.UploadAsync("quake3", notAnImage));
     }
 
+    [Fact]
+    public async Task El_servicio_de_portadas_rechaza_un_png_con_cabecera_valida_pero_cuerpo_truncado()
+    {
+        var options = new ServerOptions(_temp.Path, HttpPort: 0, ListenAddress: "127.0.0.1");
+        await using var app = ServerWebHost.CreateApp(options);
+        await app.StartAsync();
+        using var http = CreateClient(app);
+
+        var source = _temp.CreateSourceDirectory(("run.exe", "fake-binary"));
+        var response = await http.PostAsJsonAsync(
+            "/api/v1/packages",
+            new CreatePackageRequest
+            {
+                GameId = "quake3",
+                Title = "Quake III Arena",
+                Version = "1.32",
+                SourceDirectory = source,
+                EntryPoint = "run.exe",
+            },
+            SharedJson.Options);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var forgedImage = Path.Combine(_temp.Path, "truncada.png");
+        await File.WriteAllBytesAsync(forgedImage,
+        [
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x00,
+        ]);
+
+        var coverUploads = app.Services.GetRequiredService<ICoverUploadService>();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => coverUploads.UploadAsync("quake3", forgedImage));
+    }
+
     /// <summary>Crea un PNG minimo y valido en disco.</summary>
     private string CreateImage()
     {

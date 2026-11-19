@@ -98,6 +98,23 @@ public sealed class CoverImageRulesTests
     }
 
     [Fact]
+    public void Rechaza_un_png_con_cabecera_valida_pero_cuerpo_truncado()
+    {
+        using var temp = new TempDirectory();
+        var path = Path.Combine(temp.Path, "portada.png");
+        File.WriteAllBytes(path,
+        [
+            0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x00,
+        ]);
+
+        var error = CoverImageRules.ValidateFile(path);
+
+        Assert.NotNull(error);
+        Assert.Contains("contenido", error, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task La_copia_temporal_sobredimensionada_elimina_el_fichero_parcial_despues_de_cerrar_el_stream()
     {
         using var temporaryDirectory = new TempDirectory();
