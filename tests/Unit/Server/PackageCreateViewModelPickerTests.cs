@@ -68,6 +68,47 @@ public sealed class PackageCreateViewModelPickerTests : IDisposable
     }
 
     [Fact]
+    public async Task Elegir_una_carpeta_que_no_existe_no_guarda_la_ruta()
+    {
+        // El dialogo del sistema operativo solo deja elegir carpetas que
+        // existen, pero un proveedor puede devolver una ruta que no esta en el
+        // disco: esa ruta no se guarda en el campo.
+        var picker = new FakePathPicker
+        {
+            FolderToPick = Path.Combine(_root, "no-existe"),
+        };
+        var viewModel = new PackageCreateViewModel(new NoopPackageCreationService(), picker);
+
+        await viewModel.PickSourceDirectoryAsync();
+
+        Assert.Equal(string.Empty, viewModel.SourceDirectory);
+        Assert.True(viewModel.HasSourceDirectoryError);
+        Assert.True(viewModel.StatusIsError);
+        Assert.False(viewModel.CanPublish);
+    }
+
+    [Fact]
+    public async Task Elegir_una_carpeta_valida_limpia_el_error_anterior()
+    {
+        var picker = new FakePathPicker
+        {
+            FolderToPick = Path.Combine(_root, "no-existe"),
+        };
+        var viewModel = new PackageCreateViewModel(new NoopPackageCreationService(), picker);
+
+        await viewModel.PickSourceDirectoryAsync();
+        Assert.True(viewModel.HasSourceDirectoryError);
+
+        // El usuario elige una carpeta que si existe: el error desaparece.
+        picker.FolderToPick = Path.Combine(_root, "game");
+        await viewModel.PickSourceDirectoryAsync();
+
+        Assert.Equal(Path.Combine(_root, "game"), viewModel.SourceDirectory);
+        Assert.False(viewModel.HasSourceDirectoryError);
+        Assert.False(viewModel.StatusIsError);
+    }
+
+    [Fact]
     public async Task Cancelar_el_dialogo_de_ejecutable_no_cambia_el_campo()
     {
         var picker = new FakePathPicker();
@@ -198,7 +239,7 @@ public sealed class PackageCreateViewModelPickerTests : IDisposable
 
     private sealed class FakePathPicker : IPathPicker
     {
-        public string? FolderToPick { get; init; }
+        public string? FolderToPick { get; set; }
 
         public string? ExecutableToPick { get; init; }
 

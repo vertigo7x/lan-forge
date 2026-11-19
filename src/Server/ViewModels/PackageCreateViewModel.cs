@@ -325,6 +325,10 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     /// Abre el dialogo de carpetas del sistema operativo y guarda la ruta
     /// absoluta de la carpeta elegida. Si el usuario cancela, el campo se queda
     /// como estaba.
+    ///
+    /// El dialogo solo deja elegir carpetas que existen, pero se comprueba
+    /// aqui tambien: un proveedor remoto puede devolver una ruta sin carpeta
+    /// local y la carpeta puede desaparecer entre la eleccion y la pulsacion.
     /// </summary>
     public async Task PickSourceDirectoryAsync()
     {
@@ -334,7 +338,16 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             return;
         }
 
-        SourceDirectory = folder.Trim();
+        var path = folder.Trim();
+        if (!Directory.Exists(path))
+        {
+            SourceDirectoryError = $"La carpeta origen no existe: '{path}'.";
+            StatusMessage = "La carpeta elegida no existe.";
+            StatusIsError = true;
+            return;
+        }
+
+        SourceDirectory = path;
         StatusMessage = null;
         StatusIsError = false;
     }

@@ -6,8 +6,8 @@ namespace LanForge.Server.ViewModels;
 /// abrir un dialogo): las acciones de elegir carpeta o ejecutable avisan de que
 /// no hay ningun dialogo disponible en lugar de fallar en silencio.
 ///
-/// La aplicacion real inyecta <see cref="AvaloniaPathPicker"/>, que si usa los
-/// dialogos nativos.
+/// La aplicacion real inyecta <see cref="Views.TopLevelPathPicker"/>, que si usa
+/// los dialogos nativos del sistema operativo.
 /// </summary>
 internal sealed class UnavailablePathPicker : Application.IPathPicker
 {
