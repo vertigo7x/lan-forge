@@ -153,6 +153,113 @@ public sealed class PackageCreatePayloadFormatTests : IDisposable
         Assert.Equal("GAME.EXE", body.GetProperty("entryPoint").GetString());
     }
 
+    [Fact]
+    public async Task El_cuerpo_de_la_peticion_lleva_el_ejecutable_relativo_de_un_subdirectorio()
+    {
+        // El ejecutable no tiene que estar en la raiz de la carpeta: puede estar
+        // en un subdirectorio («bin/game.exe»). La ruta relativa lo conserva y el
+        // servidor lo resuelve dentro del paquete.
+        var bin = Path.Combine(_sourceDirectory, "bin");
+        Directory.CreateDirectory(bin);
+        var executable = Path.Combine(bin, "game.exe");
+        File.WriteAllText(executable, "MZ");
+
+        var body = await CapturePayloadAsync(_sourceDirectory, executable);
+
+        Assert.Equal(_sourceDirectory, body.GetProperty("sourceDirectory").GetString());
+        Assert.Equal("bin/game.exe", body.GetProperty("entryPoint").GetString());
+
+        // La ruta relativa no puede llevar la carpeta absoluta delante.
+        Assert.DoesNotContain(
+            _sourceDirectory,
+            body.GetProperty("entryPoint").GetString(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task El_cuerpo_de_la_peticion_recorta_los_espacios_de_los_campos()
+    {
+        // El organizador puede dejar espacios alrededor de lo que escribe o de
+        // lo que elige. Los espacios sobrantes no pueden viajar al servidor: la
+        // carpeta se manda como la ruta absoluta real y el ejecutable como la
+        // ruta relativa.
+        var body = await CapturePayloadAsync(
+            _sourceDirectory,
+            _executable,
+            arguments: "  --fullscreen  ");
+
+        Assert.Equal(_sourceDirectory, body.GetProperty("sourceDirectory").GetString());
+        Assert.Equal("game.exe", body.GetProperty("entryPoint").GetString());
+        Assert.Equal("--fullscreen", body.GetProperty("arguments").GetString());
+    }
+
+    [Fact]
+    public async Task El_cliente_manda_el_ejecutable_absoluto_y_el_servidor_el_relativo()
+    {
+        // INVARIANTE DEL CONTRATO: el formulario manda la ruta ABSOLUTA del
+        // ejecutable (la que devuelve el dialogo del sistema operativo y la que
+        // se comprueba contra el disco), pero el payload lleva la ruta RELATIVA
+        // dentro de la carpeta, que es lo que el endpoint firma en el manifiesto
+        // y lo que el cliente resuelve contra el directorio de instalacion.
+        //
+        // BuildFormRequest y BuildPayloadRequest son casi identicos y solo se
+        // diferencian en esa linea: si alguien los unifica, el servidor
+        // recibiria una ruta absoluta y publicaria un archivo llamado
+        // «C:\...». Este test ata las dos mitades.
+        var raw = await CaptureRawPayloadAsync(_sourceDirectory, _executable);
+
+        using var document = JsonDocument.Parse(raw);
+        var sourceDirectory = document.RootElement.GetProperty("sourceDirectory").GetString();
+        var entryPoint = document.RootElement.GetProperty("entryPoint").GetString();
+
+        // La carpeta origen viaja ABSOLUTA: es la ruta del servidor.
+        Assert.Equal(_sourceDirectory, sourceDirectory);
+        Assert.True(Path.IsPathRooted(sourceDirectory!));
+
+        // El ejecutable viaja RELATIVO a esa carpeta.
+        Assert.Equal("game.exe", entryPoint);
+        Assert.False(Path.IsPathRooted(entryPoint!));
+        Assert.DoesNotContain(
+            sourceDirectory!,
+            entryPoint!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task El_cuerpo_de_la_peticion_conserva_la_ruta_absoluta_del_ejecutable_que_el_organizador_eligio()
+    {
+        // La ruta que elige el organizador se guarda tal cual en el campo y es
+        // la que se comprueba contra el disco: no se normaliza, no se acorta y
+        // no se transforma antes de validar.
+        var capture = new CapturingHandler();
+        using var service = new HttpPackageCreationService("http://127.0.0.1:8710", capture);
+        var picker = new FixedPathPicker(_sourceDirectory, _executable);
+        var viewModel = new PackageCreateViewModel(service, picker)
+        {
+            GameId = "neon-drift",
+            Title = "Neon Drift",
+            Version = "1.2.3",
+        };
+
+        await viewModel.PickSourceDirectoryAsync();
+        await viewModel.PickEntryPointAsync();
+
+        // El campo conserva la ruta absoluta tal cual.
+        Assert.Equal(_sourceDirectory, viewModel.SourceDirectory);
+        Assert.Equal(_executable, viewModel.EntryPoint);
+
+        // Y el payload convierte solo el ejecutable, no la carpeta.
+        await viewModel.SubmitAsync();
+
+        using var document = JsonDocument.Parse(capture.Body!);
+        Assert.Equal(
+            _sourceDirectory,
+            document.RootElement.GetProperty("sourceDirectory").GetString());
+        Assert.Equal(
+            "game.exe",
+            document.RootElement.GetProperty("entryPoint").GetString());
+    }
+
     /// <summary>
     /// Publica el formulario contra un cliente HTTP que captura el cuerpo de
     /// la petición y devuelve una respuesta correcta.

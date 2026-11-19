@@ -102,6 +102,98 @@ public sealed class PackageCreateViewModelTests : IDisposable
         Assert.True(viewModel.CanSubmit);
     }
 
+    // ---------- Restablecer ----------
+
+    [Fact]
+    public async Task Reset_vacia_los_campos_los_errores_y_el_mensaje()
+    {
+        // El boton «Restablecer» existe en la vista y no tenia ninguna prueba:
+        // nada ataba que vaciara el formulario ni que limpiara los errores.
+        var service = new RecordingPackageCreationService
+        {
+            Result = PackageCreationResult.Invalid(new Dictionary<string, string>
+            {
+                [PackageCreationFields.Version] = "Esa versión ya existe.",
+            }),
+        };
+        var viewModel = CreateValidViewModel(service);
+
+        // Primero se provoca un error, para que haya algo que limpiar.
+        await viewModel.SubmitAsync();
+        Assert.True(viewModel.HasVersionError);
+        Assert.True(viewModel.StatusIsError);
+        Assert.NotNull(viewModel.StatusMessage);
+
+        viewModel.Reset();
+
+        // Los campos quedan vacios.
+        Assert.Equal(string.Empty, viewModel.GameId);
+        Assert.Equal(string.Empty, viewModel.Title);
+        Assert.Equal(string.Empty, viewModel.Version);
+        Assert.Equal(string.Empty, viewModel.SourceDirectory);
+        Assert.Equal(string.Empty, viewModel.EntryPoint);
+        Assert.Equal(string.Empty, viewModel.Arguments);
+
+        // Los errores y el mensaje general desaparecen.
+        Assert.False(viewModel.HasGameIdError);
+        Assert.False(viewModel.HasTitleError);
+        Assert.False(viewModel.HasVersionError);
+        Assert.False(viewModel.HasSourceDirectoryError);
+        Assert.False(viewModel.HasEntryPointError);
+        Assert.False(viewModel.HasArgumentsError);
+        Assert.False(viewModel.HasStatusMessage);
+        Assert.False(viewModel.StatusIsError);
+    }
+
+    [Fact]
+    public void Reset_no_deja_el_boton_coherente_tras_un_envio_terminado()
+    {
+        // Tras restablecer, el boton de publicar se queda deshabilitado: no hay
+        // carpeta ni ejecutable que valgan. El mensaje que lo explica tambien se
+        // ha ido, asi que el boton y el texto siguen diciendo lo mismo.
+        var service = new RecordingPackageCreationService();
+        var viewModel = CreateValidViewModel(service);
+
+        Assert.True(viewModel.CanPublish);
+
+        viewModel.Reset();
+
+        Assert.False(viewModel.CanPublish);
+        Assert.Equal(
+            PackageSourcePaths.MissingSourceDirectoryMessage,
+            viewModel.SourcePathsError);
+    }
+
+    [Fact]
+    public async Task Reset_durante_un_envio_en_vuelo_no_deja_el_boton_incoherente()
+    {
+        // El boton «Restablecer» no se deshabilita durante el envio, asi que el
+        // organizador puede pulsarlo con una peticion en curso. Al terminar el
+        // envio, el estado del boton tiene que ser coherente: ni habilitado sin
+        // motivo ni deshabilitado sin motivo.
+        var service = new BlockingPackageCreationService();
+        var viewModel = CreateValidViewModel(service);
+
+        var submit = viewModel.SubmitAsync();
+        await service.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(viewModel.IsSubmitting);
+        Assert.False(viewModel.CanSubmit);
+
+        // El organizador pulsa «Restablecer» mientras la peticion sigue en vuelo.
+        viewModel.Reset();
+        Assert.Equal(string.Empty, viewModel.GameId);
+        Assert.Equal(string.Empty, viewModel.SourceDirectory);
+
+        service.Complete();
+        await submit;
+
+        // Al terminar, el envio queda habilitado y el boton de publicar vuelve
+        // a depender solo de las rutas, que ahora faltan.
+        Assert.False(viewModel.IsSubmitting);
+        Assert.True(viewModel.CanSubmit);
+        Assert.False(viewModel.CanPublish);
+    }
+
     private PackageCreateViewModel CreateValidViewModel(IPackageCreationService service)
     {
         var viewModel = new PackageCreateViewModel(service)

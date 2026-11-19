@@ -150,6 +150,33 @@ public sealed class PackageSourcePathsValidationTests : IDisposable
         Assert.Equal(PackageSourcePaths.MissingExecutableMessage, error);
     }
 
+    [Fact]
+    public void La_regla_rechaza_un_directorio_que_se_llama_como_un_ejecutable()
+    {
+        // El ejecutable tiene que ser un ARCHIVO. Un directorio llamado
+        // «game.exe» tiene la extension correcta, asi que la comprobacion de la
+        // extension no lo rechaza: lo rechaza que no sea un archivo.
+        var directory = Path.Combine(_sourceDirectory, "carpeta.exe");
+        Directory.CreateDirectory(directory);
+
+        var error = PackageSourcePaths.Validate(_sourceDirectory, directory);
+
+        Assert.Equal(PackageSourcePaths.MissingExecutableMessage, error);
+    }
+
+    [Fact]
+    public void La_regla_rechaza_un_archivo_que_hace_de_carpeta_origen()
+    {
+        // La carpeta origen tiene que ser un DIRECTORIO. Un archivo no vale,
+        // aunque exista en el disco.
+        var file = Path.Combine(_root, "no-es-una-carpeta");
+        File.WriteAllText(file, "no soy una carpeta");
+
+        var error = PackageSourcePaths.Validate(file, _executable);
+
+        Assert.Equal(PackageSourcePaths.MissingSourceDirectoryMessage, error);
+    }
+
     // ---------- El boton de publicar ----------
 
     [Fact]
@@ -350,6 +377,63 @@ public sealed class PackageSourcePathsValidationTests : IDisposable
         Assert.False(viewModel.StatusIsError);
     }
 
+    // ---------- El dialogo no disponible ----------
+
+    [Fact]
+    public async Task El_selector_no_disponible_avisa_al_organizador()
+    {
+        // Sin dialogo del sistema operativo, pulsar «Examinar…» no abre nada.
+        // Sin un aviso, el organizador ve que el boton no hace nada y no tiene
+        // ninguna pista de por que: el formulario tiene que decirlo.
+        var viewModel = new PackageCreateViewModel(
+            new NoopPackageCreationService(),
+            new UnavailablePathPickerStub());
+
+        await viewModel.PickSourceDirectoryAsync();
+
+        Assert.True(viewModel.HasStatusMessage);
+        Assert.True(viewModel.StatusIsError);
+        Assert.Equal(
+            PackageCreateViewModel.PathPickerUnavailableMessage,
+            viewModel.StatusMessage);
+
+        // El mensaje es accionable: dice que falta el dialogo y que hay que
+        // escribir la ruta a mano.
+        Assert.Contains("diálogo", viewModel.StatusMessage!, StringComparison.Ordinal);
+        Assert.Contains("a mano", viewModel.StatusMessage!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task El_selector_no_disponible_avisa_al_organizador_al_elegir_el_ejecutable()
+    {
+        var viewModel = new PackageCreateViewModel(
+            new NoopPackageCreationService(),
+            new UnavailablePathPickerStub());
+
+        await viewModel.PickEntryPointAsync();
+
+        Assert.True(viewModel.HasStatusMessage);
+        Assert.True(viewModel.StatusIsError);
+        Assert.Equal(
+            PackageCreateViewModel.PathPickerUnavailableMessage,
+            viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Cancelar_el_dialogo_no_avisa_al_organizador()
+    {
+        // Cancelar es la forma NORMAL de dejar el campo como estaba: no es un
+        // fallo y no debe ensuciar el formulario con un error.
+        var picker = new FakePathPicker();
+        var viewModel = new PackageCreateViewModel(new NoopPackageCreationService(), picker);
+
+        await viewModel.PickSourceDirectoryAsync();
+        await viewModel.PickEntryPointAsync();
+
+        Assert.False(viewModel.HasStatusMessage);
+        Assert.False(viewModel.StatusIsError);
+    }
+
     // ---------- El payload no cambia ----------
 
     [Fact]
@@ -404,6 +488,22 @@ public sealed class PackageSourcePathsValidationTests : IDisposable
 
         public Task<string?> PickExecutableAsync(CancellationToken cancellationToken = default) =>
             Task.FromResult(ExecutableToPick);
+    }
+
+    /// <summary>
+    /// Selector sin dialogo del sistema operativo, como el que usa el view
+    /// model cuando se crea sin selector. Declara que no esta disponible, que es
+    /// justo lo que el formulario tiene que notar para avisar al organizador.
+    /// </summary>
+    private sealed class UnavailablePathPickerStub : IPathPicker
+    {
+        public bool IsAvailable => false;
+
+        public Task<string?> PickFolderAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
+
+        public Task<string?> PickExecutableAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<string?>(null);
     }
 
     private sealed class NoopPackageCreationService : IPackageCreationService

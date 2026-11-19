@@ -163,6 +163,45 @@ public sealed class TopLevelPathPickerTests : IDisposable
     }
 
     [Fact]
+    public void El_selector_sin_ventana_declara_que_no_hay_dialogo()
+    {
+        // Sin ventana no hay proveedor de almacenamiento, asi que no hay dialogo
+        // que abrir: el formulario tiene que poder avisar en vez de dejar al
+        // organizador pulsando «Examinar…» sin que pase nada.
+        var picker = new TopLevelPathPicker(new Control());
+
+        Assert.False(picker.IsAvailable);
+    }
+
+    [Fact]
+    public void El_selector_con_ventana_declara_que_hay_dialogo()
+    {
+        // Con la vista pegada a una ventana hay proveedor de almacenamiento: el
+        // dialogo se puede abrir (en headless devuelve una coleccion vacia, que
+        // es indistinguible de una cancelacion, pero no es «no hay dialogo»).
+        PackageCreateView? view = null;
+        Window? window = null;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            view = new PackageCreateView(new NoopPackageCreationService());
+            window = new Window { Content = view };
+            window.Show();
+            window.UpdateLayout();
+        });
+
+        try
+        {
+            var picker = new TopLevelPathPicker(view!);
+
+            Assert.True(picker.IsAvailable);
+        }
+        finally
+        {
+            HeadlessAvalonia.RunOnUiThreadAndWait(window!.Close);
+        }
+    }
+
+    [Fact]
     public async Task Un_elemento_con_ruta_local_devuelve_la_ruta_tal_cual()
     {
         // La ruta que devuelve el dialogo es la que el servidor recibe: no se

@@ -123,6 +123,13 @@ internal sealed class TopLevelPathPicker : IPathPicker
         _owner = owner;
     }
 
+    /// <summary>
+    /// Hay dialogo disponible mientras la vista este pegada a una ventana con
+    /// proveedor de almacenamiento. Si no lo esta, avisar al organizador es
+    /// mejor que dejar el boton «Examinar…» sin hacer nada.
+    /// </summary>
+    public bool IsAvailable => Storage() is not null;
+
     /// <inheritdoc />
     public async Task<string?> PickFolderAsync(CancellationToken cancellationToken = default)
     {

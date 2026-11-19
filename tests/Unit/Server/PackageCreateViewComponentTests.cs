@@ -240,6 +240,60 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
     }
 
     [Fact]
+    public void El_boton_de_restablecer_esta_presente_y_vinculado_a_su_comando()
+    {
+        // El boton «Restablecer» vacia el formulario. Existia en la vista pero
+        // no tenia ninguna prueba que atara su presencia ni su vinculo con el
+        // comando del view model.
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        var reset = Descendants<Button>(window).Single(candidate => candidate.Name == "ResetButton");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            Assert.NotNull(reset.Command);
+            Assert.Same(view.ViewModel.ResetCommand, reset.Command);
+        });
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_boton_de_restablecer_vacia_el_formulario()
+    {
+        // El efecto del boton en la vista real: al pulsarlo, los campos se
+        // vacian y el boton de publicar vuelve a quedar deshabilitado.
+        var service = new RecordingPackageCreationService();
+        var (view, window) = ShowView(service);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.SetFormValues(
+            "neon-drift",
+            "Neon Drift",
+            "1.2.3",
+            _game.SourceDirectory,
+            _game.ExecutablePath,
+            "--fullscreen"));
+
+        var reset = Descendants<Button>(window).Single(candidate => candidate.Name == "ResetButton");
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => reset.Command?.Execute(null));
+        HeadlessAvalonia.RunUiJobs();
+
+        var textBoxes = Descendants<TextBox>(window);
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            Assert.All(textBoxes, box => Assert.Equal(string.Empty, box.Text ?? string.Empty));
+        });
+
+        var publish = Descendants<Button>(window).Single(candidate => candidate.Name == "PublishButton");
+        var enabled = true;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => enabled = publish.IsEnabled);
+        Assert.False(enabled);
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
     public void La_carpeta_y_el_ejecutable_no_se_pueden_escribir_a_mano()
     {
         var service = new RecordingPackageCreationService();

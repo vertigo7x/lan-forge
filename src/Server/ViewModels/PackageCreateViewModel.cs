@@ -178,6 +178,14 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         private set => SetField(ref _statusIsError, value, nameof(StatusIsError));
     }
 
+    /// <summary>
+    /// Mensaje que se muestra cuando el boton «Examinar…» no puede abrir el
+    /// dialogo del sistema operativo. Es accionable: dice que falta el dialogo
+    /// y que hay que escribir la ruta a mano.
+    /// </summary>
+    public const string PathPickerUnavailableMessage =
+        "No hay ningún diálogo del sistema operativo disponible: escribe la ruta a mano.";
+
     public bool HasStatusMessage => !string.IsNullOrEmpty(_statusMessage);
 
     public DelegateCommand SubmitCommand { get; }
@@ -336,6 +344,11 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task PickSourceDirectoryAsync()
     {
+        if (!PathPickerAvailable())
+        {
+            return;
+        }
+
         var folder = await _pathPicker.PickFolderAsync();
         if (string.IsNullOrWhiteSpace(folder))
         {
@@ -369,6 +382,11 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     /// </summary>
     public async Task PickEntryPointAsync()
     {
+        if (!PathPickerAvailable())
+        {
+            return;
+        }
+
         var executable = await _pathPicker.PickExecutableAsync();
         if (string.IsNullOrWhiteSpace(executable))
         {
@@ -412,6 +430,27 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         SourceDirectory = string.Empty;
         EntryPoint = string.Empty;
         Arguments = string.Empty;
+    }
+
+    /// <summary>
+    /// Comprueba que hay un dialogo del sistema operativo disponible para elegir
+    /// una ruta. Si no lo hay, avisa al organizador y devuelve false.
+    ///
+    /// Cancelar un dialogo NO es lo mismo que no tener dialogo: cancelar es la
+    /// forma normal de dejar el campo como estaba y se queda en silencio. Pero si
+    /// el boton «Examinar…» no puede abrir nada, el organizador veria que no pasa
+    /// nada y no tendria ninguna pista de por que.
+    /// </summary>
+    private bool PathPickerAvailable()
+    {
+        if (_pathPicker.IsAvailable)
+        {
+            return true;
+        }
+
+        StatusMessage = PathPickerUnavailableMessage;
+        StatusIsError = true;
+        return false;
     }
 
     /// <summary>

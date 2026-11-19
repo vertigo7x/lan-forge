@@ -11,6 +11,20 @@ namespace LanForge.Server.Application;
 public interface IPathPicker
 {
     /// <summary>
+    /// Indica si hay un dialogo del sistema operativo disponible para elegir una
+    /// ruta.
+    ///
+    /// Distingue dos situaciones que las dos devuelven null pero no son la misma:
+    /// el usuario cancela el dialogo (silencioso, es lo normal) y no hay ningun
+    /// dialogo que abrir (un fallo que el organizador tiene que conocer, porque
+    /// pulsar «Examinar…» no hace nada y no hay ninguna pista de por que).
+    ///
+    /// Por defecto se considera que el dialogo esta disponible: solo los
+    /// selectores que saben que no pueden abrirlo lo declaran.
+    /// </summary>
+    bool IsAvailable => true;
+
+    /// <summary>
     /// Abre el dialogo de carpetas del sistema operativo y devuelve la ruta
     /// absoluta de la carpeta elegida, o null si se cancela.
     /// </summary>

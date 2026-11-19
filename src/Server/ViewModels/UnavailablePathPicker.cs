@@ -11,6 +11,12 @@ namespace LanForge.Server.ViewModels;
 /// </summary>
 internal sealed class UnavailablePathPicker : Application.IPathPicker
 {
+    /// <summary>
+    /// No hay ningun dialogo que abrir: el formulario tiene que avisar en vez de
+    /// dejar al organizador pulsando «Examinar…» sin que pase nada.
+    /// </summary>
+    public bool IsAvailable => false;
+
     /// <inheritdoc />
     public Task<string?> PickFolderAsync(CancellationToken cancellationToken = default) =>
         Task.FromResult<string?>(null);

@@ -17,8 +17,8 @@ prueban sin abrir ninguna ventana.
 | Botón de publicar | `PackageSourcePathsValidationTests`, `PackageCreateViewComponentTests` | `CanPublish` deshabilitado + el motivo visible en la vista real de Avalonia |
 | Formulario | `PackageCreateViewModelPickerTests`, `PackageCreateViewComponentTests` | Que un diálogo cancelado o con ruta inválida no guarde la ruta, que el botón se rehabilite con rutas válidas |
 | Opciones de los diálogos | `PackageCreateViewExecutablePickerTests` | Filtro `*.exe` del diálogo de ejecutables, `AllowMultiple = false`, títulos de los dos diálogos |
-| Cableado del selector nativo | `TopLevelPathPickerTests` | Vista sin ventana → `null`, diálogo sin elementos → `null`, sin excepciones en el hilo de UI, traducción del elemento a ruta local |
-| Formato del payload | `PackageCreatePayloadFormatTests` | Cuerpo JSON real de la petición: carpeta absoluta, ejecutable relativo, nombres de campo del contrato |
+| Cableado del selector nativo | `TopLevelPathPickerTests` | Vista sin ventana → `null`, diálogo sin elementos → `null`, sin excepciones en el hilo de UI, traducción del elemento a ruta local, disponibilidad del diálogo con y sin ventana |
+| Formato del payload | `PackageCreatePayloadFormatTests` | Cuerpo JSON real de la petición: carpeta absoluta, ejecutable relativo (incluido subdirectorio), nombres de campo del contrato, recorte de espacios |
 | Flujo completo | `PackageCreateViewManualFlowTests` | La vista real publica por HTTP contra el endpoint real y el paquete se crea |
 
 ## Lo que NO se puede probar automáticamente
@@ -58,6 +58,23 @@ view model después de recibir la ruta. Por eso:
   `SourceDirectoryPickerOptions()`), no abriéndolos.
 - El **flujo** se comprueba con `IPathPicker` simulado: lo que llega al
   view model es una ruta, y a partir de ahí todo es código normal.
+
+### Cancelar no es lo mismo que no tener diálogo
+
+Las dos situaciones devuelven `null`, pero no son la misma y el formulario las
+trata distinto:
+
+| Situación | `IPathPicker.IsAvailable` | Comportamiento |
+|---|---|---|
+| El usuario cancela el diálogo | `true` | Silencioso: el campo se queda como estaba. Es la forma normal de dejar el campo como estaba. |
+| No hay ningún diálogo que abrir | `false` | El formulario avisa con `PathPickerUnavailableMessage` («No hay ningún diálogo del sistema operativo disponible: escribe la ruta a mano.»), porque si no el organizador vería que «Examinar…» no hace nada y no tendría ninguna pista de por qué. |
+
+`IPathPicker.IsAvailable` tiene valor por defecto `true`: solo los selectores
+que saben que no pueden abrir un diálogo lo declaran `false`
+(`UnavailablePathPicker`, y `TopLevelPathPicker` cuando la vista no está
+pegada a ninguna ventana). La distinción está cubierta por
+`El_selector_no_disponible_avisa_al_organizador` y
+`Cancelar_el_dialogo_no_avisa_al_organizador`.
 
 ### Lo que queda para la prueba manual
 
