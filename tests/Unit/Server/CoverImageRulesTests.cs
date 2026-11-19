@@ -98,14 +98,19 @@ public sealed class CoverImageRulesTests
     }
 
     [Fact]
-    public async Task La_copia_temporal_rechaza_y_no_devuelve_ruta_si_supera_el_limite()
+    public async Task La_copia_temporal_sobredimensionada_elimina_el_fichero_parcial_despues_de_cerrar_el_stream()
     {
+        using var temporaryDirectory = new TempDirectory();
         await using var source = new MemoryStream(new byte[CoverImageRules.MaxSizeBytes + 1]);
 
-        var (path, error) = await CoverTemporaryFile.CopyFromAsync(source, "portada.png");
+        var (path, error) = await CoverTemporaryFile.CopyFromAsync(
+            source,
+            "portada.png",
+            temporaryDirectory: temporaryDirectory.Path);
 
         Assert.Null(path);
         Assert.Contains("5 MB", error, StringComparison.Ordinal);
+        Assert.Empty(Directory.EnumerateFiles(temporaryDirectory.Path, "lanforge-cover-*"));
     }
 
     [Fact]

@@ -6,7 +6,8 @@ public static class CoverTemporaryFile
     public static async Task<(string? Path, string? Error)> CopyFromAsync(
         Stream source,
         string sourceFileName,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? temporaryDirectory = null)
     {
         ArgumentNullException.ThrowIfNull(source);
 
@@ -16,23 +17,32 @@ public static class CoverTemporaryFile
             return (null, "Solo se admiten imagenes PNG, JPG, JPEG o WEBP.");
         }
 
-        var temporary = Path.Combine(Path.GetTempPath(), $"lanforge-cover-{Guid.NewGuid():n}{extension}");
+        var temporary = Path.Combine(temporaryDirectory ?? Path.GetTempPath(), $"lanforge-cover-{Guid.NewGuid():n}{extension}");
         try
         {
-            await using var target = File.Create(temporary);
-            var buffer = new byte[81920];
-            long copied = 0;
-            int read;
-            while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
+            var exceededMaximumSize = false;
+            await using (var target = File.Create(temporary))
             {
-                copied += read;
-                if (copied > CoverImageRules.MaxSizeBytes)
+                var buffer = new byte[81920];
+                long copied = 0;
+                int read;
+                while ((read = await source.ReadAsync(buffer, cancellationToken)) > 0)
                 {
-                    TryDelete(temporary);
-                    return (null, $"La imagen no puede pasar de {CoverImageRules.MaxSizeBytes / (1024 * 1024)} MB.");
-                }
+                    copied += read;
+                    if (copied > CoverImageRules.MaxSizeBytes)
+                    {
+                        exceededMaximumSize = true;
+                        break;
+                    }
 
-                await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                    await target.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                }
+            }
+
+            if (exceededMaximumSize)
+            {
+                TryDelete(temporary);
+                return (null, $"La imagen no puede pasar de {CoverImageRules.MaxSizeBytes / (1024 * 1024)} MB.");
             }
 
             return (temporary, null);
