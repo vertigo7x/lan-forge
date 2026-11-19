@@ -180,11 +180,19 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
     /// <summary>
     /// Mensaje que se muestra cuando el boton «Examinar…» no puede abrir el
-    /// dialogo del sistema operativo. Es accionable: dice que falta el dialogo
-    /// y que hay que escribir la ruta a mano.
+    /// dialogo del sistema operativo.
+    ///
+    /// Es accionable de verdad: los campos de ruta son de solo lectura, asi que
+    /// la unica forma de rellenarlos es el dialogo del sistema operativo. Por
+    /// eso el mensaje NO puede recomendar escribir la ruta a mano: esa accion
+    /// es imposible con el formulario actual. Lo que si funciona es reabrir el
+    /// formulario en una ventana, que es lo que devuelve el dialogo nativo
+    /// (sin ventana no hay proveedor de almacenamiento y no hay dialogo que
+    /// abrir).
     /// </summary>
     public const string PathPickerUnavailableMessage =
-        "No hay ningún diálogo del sistema operativo disponible: escribe la ruta a mano.";
+        "No hay ningún diálogo del sistema operativo disponible: las rutas solo se pueden elegir con el diálogo, " +
+        "así que cierra esta ventana y vuelve a abrir el formulario para elegirlas.";
 
     public bool HasStatusMessage => !string.IsNullOrEmpty(_statusMessage);
 

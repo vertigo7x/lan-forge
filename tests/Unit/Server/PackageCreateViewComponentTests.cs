@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using LanForge.Server.Application;
+using LanForge.Server.ViewModels;
 using LanForge.Server.Views;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -310,6 +311,50 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             Assert.True(sourceDirectory.IsReadOnly);
             Assert.True(entryPoint.IsReadOnly);
         });
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_aviso_de_dialogo_no_disponible_no_recomienda_una_accion_imposible()
+    {
+        // REGRESION: el aviso de «no hay dialogo» recomendaba escribir la
+        // ruta a mano, pero los dos campos de ruta son de solo lectura: la
+        // accion que proponia era imposible y el organizador no tenia forma de
+        // recuperarlo.
+        //
+        // Esta prueba ata las dos cosas: comprueba que los campos siguen siendo
+        // de solo lectura (la restriccion real) y que el aviso NO ofrece la
+        // recuperacion imposible. Si alguien vuelve a hacer editables los
+        // campos, la primera comprobacion avisa; si alguien vuelve a quitar la
+        // recuperacion imposible del mensaje, la segunda falla.
+        var service = new RecordingPackageCreationService();
+        var (_, window) = ShowView(service);
+
+        var textBoxes = Descendants<TextBox>(window);
+        var sourceDirectory = textBoxes.Single(box => box.Name == "SourceDirectoryBox");
+        var entryPoint = textBoxes.Single(box => box.Name == "EntryPointBox");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            Assert.True(sourceDirectory.IsReadOnly);
+            Assert.True(entryPoint.IsReadOnly);
+        });
+
+        // El aviso no puede mandar a escribir la ruta a mano: con los campos de
+        // solo lectura esa accion no se puede llevar a cabo.
+        var message = PackageCreateViewModel.PathPickerUnavailableMessage;
+        Assert.DoesNotContain("a mano", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("escribe", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("escribir", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("teclea", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("copia la ruta", message, StringComparison.OrdinalIgnoreCase);
+
+        // Pero si tiene que ofrecer una recuperacion posible: el dialogo nativo
+        // vuelve cuando el formulario esta pegado a una ventana, asi que
+        // reabrir el formulario es una accion que funciona.
+        Assert.Contains("diálogo", message, StringComparison.Ordinal);
+        Assert.Contains("vuelve a abrir", message, StringComparison.Ordinal);
 
         HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }

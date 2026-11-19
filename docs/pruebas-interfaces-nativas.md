@@ -67,7 +67,7 @@ trata distinto:
 | Situación | `IPathPicker.IsAvailable` | Comportamiento |
 |---|---|---|
 | El usuario cancela el diálogo | `true` | Silencioso: el campo se queda como estaba. Es la forma normal de dejar el campo como estaba. |
-| No hay ningún diálogo que abrir | `false` | El formulario avisa con `PathPickerUnavailableMessage` («No hay ningún diálogo del sistema operativo disponible: escribe la ruta a mano.»), porque si no el organizador vería que «Examinar…» no hace nada y no tendría ninguna pista de por qué. |
+| No hay ningún diálogo que abrir | `false` | El formulario avisa con `PathPickerUnavailableMessage` («No hay ningún diálogo del sistema operativo disponible: las rutas solo se pueden elegir con el diálogo, así que cierra esta ventana y vuelve a abrir el formulario para elegirlas.»), porque si no el organizador vería que «Examinar…» no hace nada y no tendría ninguna pista de por qué. |
 
 `IPathPicker.IsAvailable` tiene valor por defecto `true`: solo los selectores
 que saben que no pueden abrir un diálogo lo declaran `false`
@@ -75,6 +75,35 @@ que saben que no pueden abrir un diálogo lo declaran `false`
 pegada a ninguna ventana). La distinción está cubierta por
 `El_selector_no_disponible_avisa_al_organizador` y
 `Cancelar_el_dialogo_no_avisa_al_organizador`.
+
+### El aviso no puede recomendar una acción imposible
+
+Los dos campos de ruta (`SourceDirectoryBox` y `EntryPointBox`) son de **solo
+lectura**: las rutas se eligen con el diálogo del sistema operativo y no se
+pueden teclear. Por eso, cuando no hay diálogo, el aviso **no puede** decir
+«escribe la ruta a mano»: sería una instrucción imposible con el formulario
+actual, y el organizador se quedaría sin forma de recuperar.
+
+La recuperación que sí funciona es **reabrir el formulario**: el diálogo nativo
+depende del proveedor de almacenamiento de la ventana (`TopLevelPathPicker`
+resuelve `TopLevel.GetTopLevel(control)?.StorageProvider`), así que sin ventana
+no hay diálogo, y al volver a abrir el formulario en una ventana vuelve a
+haberlo. Está medido en `El_selector_con_ventana_declara_que_hay_dialogo`
+(`true` con ventana) frente a `El_selector_sin_ventana_declara_que_no_hay_dialogo`
+(`false` sin ventana).
+
+Dos pruebas atan esta decisión:
+
+- `El_selector_no_disponible_avisa_al_organizador` exige que el aviso sea
+  accionable y que ofrezca la recuperación real («vuelve a abrir»), no una
+  imposible.
+- `El_aviso_de_dialogo_no_disponible_no_recomienda_una_accion_imposible` es la
+  guarda de regresión: comprueba **en la vista real de Avalonia** que los dos
+  campos siguen siendo de solo lectura y que el aviso no contiene ninguna
+  variante de la acción imposible («a mano», «escribe», «escribir»,
+  «teclea», «copia la ruta»). Si alguien vuelve a hacer editables los campos,
+  la primera comprobación de la prueba avisa; si alguien vuelve a meter la
+  recuperación imposible en el mensaje, la segunda falla.
 
 ### Lo que queda para la prueba manual
 

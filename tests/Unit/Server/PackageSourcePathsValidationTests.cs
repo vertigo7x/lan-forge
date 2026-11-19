@@ -397,10 +397,10 @@ public sealed class PackageSourcePathsValidationTests : IDisposable
             PackageCreateViewModel.PathPickerUnavailableMessage,
             viewModel.StatusMessage);
 
-        // El mensaje es accionable: dice que falta el dialogo y que hay que
-        // escribir la ruta a mano.
+        // El mensaje es accionable: dice que falta el dialogo y explica como
+        // recuperarlo (reabrir el formulario en una ventana).
         Assert.Contains("diálogo", viewModel.StatusMessage!, StringComparison.Ordinal);
-        Assert.Contains("a mano", viewModel.StatusMessage!, StringComparison.Ordinal);
+        Assert.Contains("vuelve a abrir", viewModel.StatusMessage!, StringComparison.Ordinal);
     }
 
     [Fact]
