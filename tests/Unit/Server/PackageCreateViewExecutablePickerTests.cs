@@ -1,3 +1,4 @@
+using Avalonia.Platform.Storage;
 using LanForge.Server.Application;
 using LanForge.Server.Views;
 
@@ -38,5 +39,52 @@ public sealed class PackageCreateViewExecutablePickerTests
         // formulario despues rechaza (o al reves).
         Assert.Equal($"*{PackageSourcePaths.ExecutableExtension}", PackageSourcePaths.ExecutablePattern);
         Assert.Equal("*.exe", PackageSourcePaths.ExecutablePattern);
+    }
+
+    // ---------- El diálogo de la carpeta origen ----------
+
+    [Fact]
+    public void El_dialogo_de_la_carpeta_elige_una_sola_carpeta()
+    {
+        // El formulario publica una carpeta: elegir varias no tiene sentido y
+        // el selector solo puede devolver una ruta.
+        var options = PackageCreateView.SourceDirectoryPickerOptions();
+
+        Assert.False(options.AllowMultiple);
+    }
+
+    [Fact]
+    public void El_dialogo_de_la_carpeta_no_filtra_por_extension()
+    {
+        // A diferencia del ejecutable, la carpeta no lleva filtro. Avalonia no
+        // admite filtros de extension en el dialogo de carpetas: la propiedad
+        // FileTypeFilter no existe en FolderPickerOpenOptions, asi que el
+        // dialogo muestra todas las carpetas. Lo que se comprueba despues es
+        // que la carpeta exista (PackageSourcePaths.Validate).
+        //
+        // Se comprueba por reflexion porque la propiedad no existe: si alguien
+        // la anadiera al modelo de Avalonia, esta prueba avisaria.
+        Assert.Null(typeof(FolderPickerOpenOptions).GetProperty("FileTypeFilter"));
+        Assert.Null(PackageCreateView.SourceDirectoryPickerOptions().GetType()
+            .GetProperty("FileTypeFilter"));
+    }
+
+    [Fact]
+    public void El_dialogo_de_la_carpeta_tiene_titulo()
+    {
+        // Sin titulo, el diálogo sale con el nombre generico del sistema
+        // operativo y el organizador no sabe que tiene que elegir la carpeta
+        // del juego portable.
+        var options = PackageCreateView.SourceDirectoryPickerOptions();
+
+        Assert.Equal("Elige la carpeta del juego portable", options.Title);
+    }
+
+    [Fact]
+    public void El_dialogo_del_ejecutable_tiene_titulo()
+    {
+        var options = PackageCreateView.ExecutablePickerOptions();
+
+        Assert.Equal("Elige el ejecutable del juego", options.Title);
     }
 }

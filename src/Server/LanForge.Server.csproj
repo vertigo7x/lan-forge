@@ -26,4 +26,14 @@
   <ItemGroup>
     <ProjectReference Include="..\Shared\LanForge.Shared.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      El selector de rutas nativo (TopLevelPathPicker) es interno: los dialogos
+      del sistema operativo son la unica parte de la aplicacion que no se puede
+      probar de verdad en headless, asi que su cableado (cancelar, elemento sin
+      ruta local, vista sin ventana) se comprueba desde las pruebas unitarias.
+    -->
+    <InternalsVisibleTo Include="LanForge.UnitTests" />
+  </ItemGroup>
 </Project>

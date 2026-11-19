@@ -82,6 +82,22 @@ public partial class PackageCreateView : UserControl
         ],
     };
 
+    /// <summary>
+    /// Opciones del diálogo nativo de carpetas de la carpeta origen.
+    ///
+    /// El diálogo elige una sola carpeta (la del juego portable) y no filtra por
+    /// extensión: lo que se comprueba despues es que la carpeta exista, en
+    /// <see cref="PackageSourcePaths.Validate"/>.
+    ///
+    /// Vive en un método aparte para que las pruebas puedan comprobar las
+    /// opciones sin abrir un diálogo.
+    /// </summary>
+    public static FolderPickerOpenOptions SourceDirectoryPickerOptions() => new()
+    {
+        AllowMultiple = false,
+        Title = "Elige la carpeta del juego portable",
+    };
+
     private static IPackageCreationService ResolveService()
     {
         var services = App.WebServices ?? throw new InvalidOperationException("El host web no está disponible.");
@@ -116,11 +132,8 @@ internal sealed class TopLevelPathPicker : IPathPicker
             return null;
         }
 
-        var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions
-        {
-            AllowMultiple = false,
-            Title = "Elige la carpeta del juego portable",
-        });
+        var folders = await storage.OpenFolderPickerAsync(
+            PackageCreateView.SourceDirectoryPickerOptions());
 
         cancellationToken.ThrowIfCancellationRequested();
         return folders.Count > 0 ? LocalPath(folders[0]) : null;
