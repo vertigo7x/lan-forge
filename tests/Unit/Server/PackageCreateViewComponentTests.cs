@@ -4,7 +4,6 @@ using Avalonia.LogicalTree;
 using LanForge.Server.Application;
 using LanForge.Server.Views;
 using Microsoft.Extensions.DependencyInjection;
-
 namespace LanForge.UnitTests.Server;
 
 /// <summary>
@@ -39,13 +38,14 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
         var (_, window) = ShowView(new RecordingPackageCreationService());
 
         var textBoxes = Descendants<TextBox>(window);
-        Assert.Equal(6, textBoxes.Length);
+        Assert.Equal(7, textBoxes.Length);
         Assert.Contains(textBoxes, box => box.Name == "GameIdBox");
         Assert.Contains(textBoxes, box => box.Name == "TitleBox");
         Assert.Contains(textBoxes, box => box.Name == "VersionBox");
         Assert.Contains(textBoxes, box => box.Name == "SourceDirectoryBox");
         Assert.Contains(textBoxes, box => box.Name == "EntryPointBox");
         Assert.Contains(textBoxes, box => box.Name == "ArgumentsBox");
+        Assert.Contains(textBoxes, box => box.Name == "CoverPathBox");
 
         HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
@@ -177,6 +177,77 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
         HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }
 
+    [Fact]
+    public void Renderiza_el_selector_de_imagen_de_portada()
+    {
+        var (_, window) = ShowView(new RecordingPackageCreationService());
+
+        var buttons = Descendants<Button>(window);
+        Assert.Contains(buttons, button => button.Name == "BrowseCoverButton");
+        Assert.Contains(buttons, button => button.Name == "ClearCoverButton");
+        Assert.Contains(Descendants<Image>(window), image => image.Name == "CoverPreviewImage");
+        Assert.Contains(Descendants<TextBlock>(window), text => text.Name == "CoverPathErrorText");
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_campo_de_portada_muestra_el_fichero_elegido_y_lo_puede_quitar()
+    {
+        using var temp = new TempDirectory();
+        var image = CreateImage(temp, "portada.png");
+        var (view, window) = ShowView(new RecordingPackageCreationService());
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.ViewModel.SelectCover(image, "image/png"));
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.UpdateLayout);
+
+        // El texto del control solo se puede leer en el hilo de UI.
+        var text = ReadCoverPathText(window);
+        Assert.Equal(image, text);
+
+        // El boton de quitar limpia la seleccion.
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            var clear = window.GetLogicalDescendants()
+                .OfType<Button>()
+                .Single(button => button.Name == "ClearCoverButton");
+            clear.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        });
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.UpdateLayout);
+
+        Assert.False(view.ViewModel.HasCoverSelected);
+        Assert.Equal(string.Empty, ReadCoverPathText(window));
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    [Fact]
+    public void El_campo_de_portada_muestra_el_error_de_un_fichero_no_valido()
+    {
+        using var temp = new TempDirectory();
+        var file = Path.Combine(temp.Path, "documento.txt");
+        File.WriteAllText(file, "esto no es una imagen");
+        var (view, window) = ShowView(new RecordingPackageCreationService());
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(() => view.ViewModel.SelectCover(file, "text/plain"));
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.UpdateLayout);
+
+        var errors = ErrorTexts(window);
+        Assert.False(string.IsNullOrWhiteSpace(errors["CoverPathErrorText"]));
+
+        HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
+    }
+
+    /// <summary>Crea un PNG minimo y valido en disco.</summary>
+    private static string CreateImage(TempDirectory temp, string fileName)
+    {
+        var path = Path.Combine(temp.Path, fileName);
+        var bytes = Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        File.WriteAllBytes(path, bytes);
+        return path;
+    }
+
     /// <summary>
     /// Envia el formulario y espera a que termine.
     ///
@@ -244,6 +315,20 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
             }
         });
         return errors;
+    }
+
+    /// <summary>Lee el texto del campo de portada. Solo en el hilo de UI.</summary>
+    private static string ReadCoverPathText(Window window)
+    {
+        var text = string.Empty;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            var box = window.GetLogicalDescendants()
+                .OfType<TextBox>()
+                .Single(candidate => candidate.Name == "CoverPathBox");
+            text = box.Text ?? string.Empty;
+        });
+        return text;
     }
 
     private sealed class RecordingPackageCreationService : IPackageCreationService

@@ -83,6 +83,30 @@
                        Foreground="#F87171"
                        TextWrapping="Wrap"/>
           </StackPanel>
+
+          <StackPanel Spacing="4">
+            <TextBlock Text="Imagen de portada (opcional)" FontWeight="SemiBold"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <TextBox x:Name="CoverPathBox"
+                       Text="{Binding CoverPath, Mode=OneWay}"
+                       Width="300"
+                       IsReadOnly="True"
+                       PlaceholderText="Sin imagen seleccionada"/>
+              <Button x:Name="BrowseCoverButton" Content="Elegir imagen…"/>
+              <Button x:Name="ClearCoverButton" Content="Quitar"/>
+            </StackPanel>
+            <Image x:Name="CoverPreviewImage"
+                   Source="{Binding CoverPreview}"
+                   Width="200"
+                   Height="120"
+                   Stretch="Uniform"
+                   HorizontalAlignment="Left"
+                   IsVisible="{Binding HasCoverSelected}"/>
+            <TextBlock x:Name="CoverPathErrorText"
+                       Text="{Binding CoverPathError}"
+                       Foreground="#F87171"
+                       TextWrapping="Wrap"/>
+          </StackPanel>
         </StackPanel>
       </Border>
 

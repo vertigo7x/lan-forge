@@ -29,13 +29,14 @@ public sealed class PackageCreateViewTests(HeadlessServerFixture fixture)
         TextBox[] textBoxes = [];
         HeadlessAvalonia.RunOnUiThreadAndWait(() =>
             textBoxes = window.GetLogicalDescendants().OfType<TextBox>().ToArray());
-        Assert.Equal(6, textBoxes.Length);
+        Assert.Equal(7, textBoxes.Length);
         Assert.Contains(textBoxes, box => box.Name == "GameIdBox");
         Assert.Contains(textBoxes, box => box.Name == "TitleBox");
         Assert.Contains(textBoxes, box => box.Name == "VersionBox");
         Assert.Contains(textBoxes, box => box.Name == "SourceDirectoryBox");
         Assert.Contains(textBoxes, box => box.Name == "EntryPointBox");
         Assert.Contains(textBoxes, box => box.Name == "ArgumentsBox");
+        Assert.Contains(textBoxes, box => box.Name == "CoverPathBox");
 
         HeadlessAvalonia.RunOnUiThreadAndWait(window.Close);
     }

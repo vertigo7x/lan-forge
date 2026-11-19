@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using Avalonia.Media.Imaging;
 using LanForge.Server.Application;
 
 namespace LanForge.Server.ViewModels;
@@ -12,6 +13,8 @@ namespace LanForge.Server.ViewModels;
 public sealed class PackageCreateViewModel : INotifyPropertyChanged
 {
     private readonly IPackageCreationService _service;
+    private readonly ICoverUploadService? _coverUploads;
+    private readonly ICoverPreviewLoader _previewLoader;
 
     private string _gameId = string.Empty;
     private string _title = string.Empty;
@@ -19,6 +22,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private string _sourceDirectory = string.Empty;
     private string _entryPoint = string.Empty;
     private string _arguments = string.Empty;
+    private string _coverPath = string.Empty;
 
     private string? _gameIdError;
     private string? _titleError;
@@ -26,6 +30,9 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private string? _sourceDirectoryError;
     private string? _entryPointError;
     private string? _argumentsError;
+    private string? _coverPathError;
+
+    private Bitmap? _coverPreview;
 
     /// <summary>
     /// Errores por campo devueltos por el servidor en el ultimo envio. Se guardan
@@ -41,9 +48,27 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private bool _statusIsError;
 
     public PackageCreateViewModel(IPackageCreationService service)
+        : this(service, coverUploads: null, previewLoader: null)
+    {
+    }
+
+    /// <summary>
+    /// Crea el estado del formulario. <paramref name="coverUploads"/> es opcional:
+    /// si no se pasa, el formulario no puede adjuntar portada y avisa de ello al
+    /// intentar publicar. La vista real lo resuelve del contenedor de servicios.
+    /// </summary>
+    /// <param name="service">Servicio de creacion de paquetes.</param>
+    /// <param name="coverUploads">Servicio de portadas; opcional.</param>
+    /// <param name="previewLoader">Cargador de la previsualizacion; opcional.</param>
+    public PackageCreateViewModel(
+        IPackageCreationService service,
+        ICoverUploadService? coverUploads,
+        ICoverPreviewLoader? previewLoader = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         _service = service;
+        _coverUploads = coverUploads;
+        _previewLoader = previewLoader ?? new AvaloniaCoverPreviewLoader();
 
         SubmitCommand = new DelegateCommand(SubmitAsync);
         ResetCommand = new DelegateCommand(() =>
@@ -91,6 +116,16 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         set => SetField(ref _arguments, value, nameof(Arguments));
     }
 
+    /// <summary>
+    /// Ruta local de la imagen de portada elegida. La elige el usuario con el
+    /// selector de ficheros y se adjunta al paquete cuando se publica.
+    /// </summary>
+    public string CoverPath
+    {
+        get => _coverPath;
+        set => SetField(ref _coverPath, value, nameof(CoverPath));
+    }
+
     // ---------- Errores por campo ----------
 
     public string? GameIdError
@@ -129,6 +164,12 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         private set => SetField(ref _argumentsError, value, nameof(ArgumentsError));
     }
 
+    public string? CoverPathError
+    {
+        get => _coverPathError;
+        private set => SetField(ref _coverPathError, value, nameof(CoverPathError));
+    }
+
     public bool HasGameIdError => !string.IsNullOrEmpty(_gameIdError);
 
     public bool HasTitleError => !string.IsNullOrEmpty(_titleError);
@@ -140,6 +181,21 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     public bool HasEntryPointError => !string.IsNullOrEmpty(_entryPointError);
 
     public bool HasArgumentsError => !string.IsNullOrEmpty(_argumentsError);
+
+    public bool HasCoverPathError => !string.IsNullOrEmpty(_coverPathError);
+
+    /// <summary>True si hay una imagen de portada elegida.</summary>
+    public bool HasCoverSelected => !string.IsNullOrWhiteSpace(_coverPath);
+
+    /// <summary>
+    /// Previsualizacion de la imagen elegida. Puede quedar en null si el fichero no
+    /// se puede decodificar: la seleccion sigue siendo valida y se puede enviar.
+    /// </summary>
+    public Bitmap? CoverPreview
+    {
+        get => _coverPreview;
+        private set => SetField(ref _coverPreview, value, nameof(CoverPreview));
+    }
 
     // ---------- Estado ----------
 
@@ -183,6 +239,48 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     // ---------- Acciones ----------
 
     /// <summary>
+    /// Elige la imagen de portada. Valida el fichero (extension, tipo MIME y
+    /// tamaño) y prepara la previsualizacion. Si el fichero no es valido, no se
+    /// selecciona y se devuelve el motivo para que la vista lo muestre.
+    /// </summary>
+    /// <param name="filePath">Ruta local del fichero elegido.</param>
+    /// <param name="contentType">Tipo MIME declarado por el selector de ficheros.</param>
+    /// <returns>Null si la seleccion es valida; si no, el mensaje de error.</returns>
+    public string? SelectCover(string? filePath, string? contentType = null)
+    {
+        if (string.IsNullOrWhiteSpace(filePath))
+        {
+            ClearCover();
+            return null;
+        }
+
+        var error = ValidateCover(filePath, contentType);
+        if (error is not null)
+        {
+            // Una seleccion invalida no deja una portada a medias: se descarta lo
+            // que hubiera antes para que el usuario no adjunte otra imagen.
+            ClearCover();
+            CoverPathError = error;
+            return error;
+        }
+
+        CoverPathError = null;
+        CoverPath = filePath;
+        CoverPreview = TryLoadPreview(filePath);
+        OnPropertyChanged(nameof(HasCoverSelected));
+        return null;
+    }
+
+    /// <summary>Quita la imagen de portada seleccionada y su previsualizacion.</summary>
+    public void ClearCover()
+    {
+        CoverPath = string.Empty;
+        CoverPathError = null;
+        CoverPreview = null;
+        OnPropertyChanged(nameof(HasCoverSelected));
+    }
+
+    /// <summary>
     /// Valida en cliente y, si todo está correcto, pide la creación del paquete.
     /// Tras crearse, el formulario se vacía para poder meter el siguiente juego.
     /// </summary>
@@ -204,6 +302,18 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             return;
         }
 
+        if (HasCoverSelected)
+        {
+            var coverError = ValidateCover(CoverPath, contentType: null);
+            if (coverError is not null)
+            {
+                CoverPathError = coverError;
+                StatusMessage = "Revisa los campos marcados: no se ha creado el paquete.";
+                StatusIsError = true;
+                return;
+            }
+        }
+
         IsSubmitting = true;
         CanSubmit = false;
         try
@@ -212,6 +322,18 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             if (result.Succeeded)
             {
                 var package = result.Package;
+
+                // La portada se adjunta DESPUES de crear el paquete: el juego tiene
+                // que existir ya en el catalogo para que se pueda asignar.
+                var coverError = await UploadCoverAsync(package?.GameId ?? request.GameId);
+                if (coverError is not null)
+                {
+                    StatusMessage = coverError;
+                    StatusIsError = true;
+                    ResetFields();
+                    return;
+                }
+
                 StatusMessage = package is null
                     ? "Paquete creado."
                     : $"Paquete creado: {package.Title} v{package.Version} ({package.FileCount} archivos).";
@@ -253,6 +375,62 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         SourceDirectory = string.Empty;
         EntryPoint = string.Empty;
         Arguments = string.Empty;
+        ClearCover();
+    }
+
+    /// <summary>
+    /// Valida el fichero de portada elegido. Devuelve null si es valido.
+    /// </summary>
+    private static string? ValidateCover(string filePath, string? contentType)
+    {
+        try
+        {
+            var info = new FileInfo(filePath);
+            if (!info.Exists)
+            {
+                return "El fichero de la imagen no existe.";
+            }
+
+            return CoverImageRules.Validate(info.Name, contentType, info.Length);
+        }
+        catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+        {
+            return "No se ha podido leer el fichero de la imagen.";
+        }
+    }
+
+    /// <summary>
+    /// Carga la previsualizacion de la imagen. Devuelve null si el fichero no se
+    /// puede decodificar: la seleccion sigue siendo valida y se puede enviar.
+    /// </summary>
+    private Bitmap? TryLoadPreview(string filePath) => _previewLoader.Load(filePath);
+
+    /// <summary>
+    /// Adjunta la portada elegida al juego recien creado. Devuelve null si todo va
+    /// bien, o el mensaje de error si la portada no se ha podido adjuntar.
+    /// </summary>
+    private async Task<string?> UploadCoverAsync(string gameId)
+    {
+        if (!HasCoverSelected)
+        {
+            return null;
+        }
+
+        if (_coverUploads is null)
+        {
+            return "El paquete se ha creado, pero no se ha podido adjuntar la portada: " +
+                   "el servicio de portadas no esta disponible.";
+        }
+
+        try
+        {
+            await _coverUploads.UploadAsync(gameId, CoverPath);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return $"El paquete se ha creado, pero no se ha podido adjuntar la portada: {ex.Message}";
+        }
     }
 
     private PackageCreationRequest BuildRequest() =>
@@ -276,6 +454,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         SourceDirectoryError = errors.GetValueOrDefault(PackageCreationFields.SourceDirectory);
         EntryPointError = errors.GetValueOrDefault(PackageCreationFields.EntryPoint);
         ArgumentsError = errors.GetValueOrDefault(PackageCreationFields.Arguments);
+        CoverPathError = errors.GetValueOrDefault(PackageCreationFields.CoverPath);
     }
 
     /// <summary>
@@ -328,6 +507,16 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     /// </summary>
     private void RefreshFieldError(string? propertyName)
     {
+        // La portada se valida aparte: no forma parte del cuerpo del paquete, asi
+        // que el validador de la peticion no sabe nada de ella.
+        if (propertyName == nameof(CoverPath))
+        {
+            CoverPathError = HasCoverSelected
+                ? ValidateCover(CoverPath, contentType: null)
+                : null;
+            return;
+        }
+
         var clientErrors = PackageCreationValidator.Validate(BuildRequest());
         var fieldKey = FieldKeyFor(propertyName);
         if (fieldKey is null)
@@ -355,6 +544,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         nameof(SourceDirectory) => PackageCreationFields.SourceDirectory,
         nameof(EntryPoint) => PackageCreationFields.EntryPoint,
         nameof(Arguments) => PackageCreationFields.Arguments,
+        nameof(CoverPath) => PackageCreationFields.CoverPath,
         _ => null,
     };
 
@@ -381,6 +571,9 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             case PackageCreationFields.Arguments:
                 ArgumentsError = message;
                 break;
+            case PackageCreationFields.CoverPath:
+                CoverPathError = message;
+                break;
         }
     }
 
@@ -392,6 +585,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
         nameof(SourceDirectory) => HasSourceDirectoryError,
         nameof(EntryPoint) => HasEntryPointError,
         nameof(Arguments) => HasArgumentsError,
+        nameof(CoverPath) => HasCoverPathError,
         _ => false,
     };
 
