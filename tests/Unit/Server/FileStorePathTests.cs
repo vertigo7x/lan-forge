@@ -209,8 +209,8 @@ public sealed class FileStorePathTests
 
             var fileName = await store.SaveAsync("quake3", image);
 
-            // El nombre guardado debe ser el que la lectura acepta (extension en minusculas).
-            Assert.Equal("quake3.png", fileName);
+            // El nombre lleva el hash del contenido y conserva la extensión en minúsculas.
+            Assert.Matches("^quake3-[a-f0-9]{64}\\.png$", fileName);
 
             // El flujo se cierra antes de borrar el directorio: en Windows un fichero
             // abierto bloquea el borrado y el test fallaba al limpiar el temporal.
@@ -220,6 +220,33 @@ public sealed class FileStorePathTests
             }
 
             Assert.True(await store.DeleteAsync(fileName));
+        }
+        finally
+        {
+            root.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task FileCoverStore_asigna_un_nombre_distinto_si_cambia_el_contenido()
+    {
+        var root = Directory.CreateTempSubdirectory("lanforge-covers");
+        try
+        {
+            var store = new FileCoverStore(root.FullName);
+            var first = Path.Combine(root.FullName, "primera.png");
+            var second = Path.Combine(root.FullName, "segunda.png");
+            await File.WriteAllTextAsync(first, "primera portada");
+            await File.WriteAllTextAsync(second, "segunda portada");
+
+            var firstFileName = await store.SaveAsync("quake3", first);
+            var secondFileName = await store.SaveAsync("quake3", second);
+
+            Assert.NotEqual(firstFileName, secondFileName);
+            await using var firstStream = await store.OpenReadAsync(firstFileName);
+            await using var secondStream = await store.OpenReadAsync(secondFileName);
+            Assert.NotNull(firstStream);
+            Assert.NotNull(secondStream);
         }
         finally
         {

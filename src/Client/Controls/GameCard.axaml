@@ -23,7 +23,7 @@
           <TextBlock Text="{Binding Meta}" Theme="{StaticResource T.Caption}" HorizontalAlignment="Left"/>
           <TextBlock Text="{Binding SizeText}" Theme="{StaticResource T.Caption}" HorizontalAlignment="Right"/>
         </Grid>
-        <Button Name="ActionButton" Height="36"
+        <Button Name="ActionButton" Theme="{StaticResource ButtonPrimary}" Height="36"
                 IsVisible="{Binding IsActionVisible}"
                 Command="{Binding ActionCommand}"
                 Content="{Binding ActionText}"/>

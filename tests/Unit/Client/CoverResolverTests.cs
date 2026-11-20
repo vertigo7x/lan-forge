@@ -4,12 +4,6 @@ namespace LanForge.UnitTests.Client;
 
 public sealed class CoverResolverTests
 {
-    private static readonly string[] Assets =
-    [
-        "avares://LanForge.Client/Assets/cover-neon-drift.png",
-        "avares://LanForge.Client/Assets/cover-starfall-arena.png",
-    ];
-
     [Fact]
     public void CachedCoverPath_devuelve_null_si_no_existe()
     {
@@ -120,18 +114,4 @@ public sealed class CoverResolverTests
         }
     }
 
-    [Fact]
-    public void FallbackAsset_es_estable_para_el_mismo_juego()
-    {
-        var first = CoverResolver.FallbackAsset("neon-drift", Assets);
-        var second = CoverResolver.FallbackAsset("neon-drift", Assets);
-        Assert.Equal(first, second);
-        Assert.Contains(first, Assets);
-    }
-
-    [Fact]
-    public void FallbackAsset_falla_con_lista_vacia()
-    {
-        Assert.Throws<ArgumentException>(() => CoverResolver.FallbackAsset("x", Array.Empty<string>()));
-    }
 }

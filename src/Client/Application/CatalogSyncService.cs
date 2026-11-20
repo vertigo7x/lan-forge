@@ -4,7 +4,11 @@ using LanForge.Shared.Security;
 
 namespace LanForge.Client.Application;
 
-public sealed record SyncResult(int EntryCount, Fingerprint ServerFingerprint, string ServerName);
+public sealed record SyncResult(
+    int EntryCount,
+    Fingerprint ServerFingerprint,
+    string ServerName,
+    string? LanPartyLogoPath);
 
 /// <summary>Sincronización del catálogo: handshake + confianza TOFU + descarga de entradas.</summary>
 public sealed class CatalogSyncService
@@ -46,7 +50,7 @@ public sealed class CatalogSyncService
 
         var entries = await _api.GetCatalogAsync(cancellationToken);
         await _store.ReplaceCatalogAsync(entries, cancellationToken);
-        return new SyncResult(entries.Count, check.Presented, hello.ServerName);
+        return new SyncResult(entries.Count, check.Presented, hello.ServerName, hello.LanPartyLogoPath);
     }
 
     public async Task<IReadOnlyList<CatalogEntry>> GetLocalCatalogAsync(CancellationToken cancellationToken = default) =>

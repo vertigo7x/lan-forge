@@ -8,8 +8,7 @@ namespace LanForge.Server.Application;
 /// portadas del propio servidor.
 ///
 /// La UI del organizador vive en el mismo proceso que el host web, asi que la
-/// portada se asigna en proceso: no hace falta tocar el contrato JSON de
-/// <c>POST /api/v1/packages</c> ni el manifiesto firmado.
+/// portada se asigna en proceso: no hace falta modificar el manifiesto firmado.
 /// </summary>
 public sealed class CatalogCoverUploadService : ICoverUploadService
 {

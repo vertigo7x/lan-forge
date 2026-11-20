@@ -89,6 +89,17 @@ public sealed class HttpServerApi : IServerApi, IDisposable
         return response.IsSuccessStatusCode ? await response.Content.ReadAsByteArrayAsync(cancellationToken) : null;
     }
 
+    public async Task<byte[]?> DownloadLanPartyLogoAsync(string fileName, CancellationToken cancellationToken = default)
+    {
+        if (fileName.Contains('/') || fileName.Contains('\\') || fileName.Contains(".."))
+        {
+            return null;
+        }
+
+        var response = await _http.GetAsync($"/api/v1/branding/{Uri.EscapeDataString(fileName)}", cancellationToken);
+        return response.IsSuccessStatusCode ? await response.Content.ReadAsByteArrayAsync(cancellationToken) : null;
+    }
+
     public void Dispose() => _http.Dispose();
 
     private static string NormalizeBaseUrl(string baseUrl)

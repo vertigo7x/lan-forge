@@ -5,4 +5,5 @@ public sealed record HelloResponse(
     int ProtocolVersion,
     string Fingerprint,
     string ServerName,
-    string ServerId);
+    string ServerId,
+    string? LanPartyLogoPath = null);

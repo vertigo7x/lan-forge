@@ -98,7 +98,7 @@ public sealed class ClientUiTests
             var window = CreateWindow();
             try
             {
-                window.FindControl<ScrollViewer>("ChatView")!.IsVisible = true;
+                window.FindControl<Grid>("ChatView")!.IsVisible = true;
                 window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
                 window.UpdateLayout();
 
@@ -139,13 +139,29 @@ public sealed class ClientUiTests
             $"El area de chat no se adapta al ancho de la ventana ({wide} <= {narrow}).");
     }
 
+    [Fact]
+    public void El_contenedor_de_mensajes_crece_con_la_altura_de_la_ventana()
+    {
+        var normal = 0.0;
+        var maximized = 0.0;
+        HeadlessAvalonia.RunOnUiThreadAndWait(() =>
+        {
+            normal = MeasureMessagesHeight(800);
+            maximized = MeasureMessagesHeight(1100);
+        });
+
+        Assert.True(
+            maximized > normal,
+            $"El contenedor de mensajes no usa la altura adicional ({maximized} <= {normal}).");
+    }
+
     // Debe llamarse dentro del hilo de UI (RunOnUiThreadAndWait).
     private static double MeasureChatCardWidth(double width)
     {
         var window = new MainWindow();
         try
         {
-            window.FindControl<ScrollViewer>("ChatView")!.IsVisible = true;
+            window.FindControl<Grid>("ChatView")!.IsVisible = true;
             window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
             window.Width = width;
             window.Height = 800;
@@ -155,6 +171,27 @@ public sealed class ClientUiTests
             var input = window.FindControl<TextBox>("ChatInput")!;
             var card = input.GetVisualAncestors().OfType<Border>().First(b => b.Padding.Left > 0);
             return card.Bounds.Width;
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    // Debe llamarse dentro del hilo de UI (RunOnUiThreadAndWait).
+    private static double MeasureMessagesHeight(double height)
+    {
+        var window = new MainWindow();
+        try
+        {
+            window.FindControl<Grid>("ChatView")!.IsVisible = true;
+            window.FindControl<ScrollViewer>("CatalogView")!.IsVisible = false;
+            window.Width = 1280;
+            window.Height = height;
+            window.Show();
+            window.UpdateLayout();
+
+            return window.FindControl<ScrollViewer>("MessagesScroll")!.Bounds.Height;
         }
         finally
         {

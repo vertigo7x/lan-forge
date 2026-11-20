@@ -36,6 +36,9 @@ public sealed class CatalogSyncServiceTests
 
         public Task<byte[]?> DownloadCoverAsync(string fileName, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
+
+        public Task<byte[]?> DownloadLanPartyLogoAsync(string fileName, CancellationToken cancellationToken = default) =>
+            throw new NotSupportedException();
     }
 
     private static (CatalogSyncService Service, FakeApi Api, Fakes.InMemoryClientStore Store) Create()
@@ -64,6 +67,7 @@ public sealed class CatalogSyncServiceTests
         var result = await service.SyncAsync(confirmNewServer: true);
 
         Assert.Equal(1, result.EntryCount);
+        Assert.Null(result.LanPartyLogoPath);
         Assert.Single(await store.GetCatalogAsync());
         Assert.NotNull(await store.GetServerTrustAsync());
     }

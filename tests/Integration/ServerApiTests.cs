@@ -10,6 +10,7 @@ using LanForge.Shared.Security;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.DependencyInjection;
+using SkiaSharp;
 
 namespace LanForge.IntegrationTests;
 
@@ -35,6 +36,9 @@ public sealed class ServerApiTests : IDisposable
         var coverPath = Path.Combine(_temp.Path, "cover.png");
         await File.WriteAllBytesAsync(coverPath, [137, 80, 78, 71, 13, 10, 26, 10]);
         await catalog.SetCoverAsync("quake3", coverPath, app.Services.GetRequiredService<ICoverStore>());
+        var logoPath = Path.Combine(_temp.Path, "lan-party-logo.png");
+        WriteTransparentPng(logoPath);
+        var logoFileName = await app.Services.GetRequiredService<ILanPartyBrandingStore>().SaveLogoAsync(logoPath);
 
         await app.StartAsync();
         var addresses = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>();
@@ -49,6 +53,7 @@ public sealed class ServerApiTests : IDisposable
         Assert.Equal(identity.Fingerprint, Fingerprint.Parse(hello.Fingerprint));
         Assert.False(string.IsNullOrWhiteSpace(hello.ServerName));
         Assert.False(string.IsNullOrWhiteSpace(hello.ServerId));
+        Assert.Equal(logoFileName, hello.LanPartyLogoPath);
 
         // Catalog: una entrada por juego publicado.
         var entries = await http.GetFromJsonAsync<List<CatalogEntry>>("/api/v1/catalog", SharedJson.Options);
@@ -91,5 +96,19 @@ public sealed class ServerApiTests : IDisposable
         var coverBytes = await http.GetByteArrayAsync($"/api/v1/covers/{coverEntry.CoverPath}");
         Assert.Equal((byte)137, coverBytes[0]);
         Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("/api/v1/covers/..%2Fidentity.json")).StatusCode);
+
+        // Branding global: se anuncia por hello y solo el archivo configurado es público.
+        var logoBytes = await http.GetByteArrayAsync($"/api/v1/branding/{logoFileName}");
+        Assert.Equal((byte)137, logoBytes[0]);
+        Assert.Equal(HttpStatusCode.NotFound, (await http.GetAsync("/api/v1/branding/..%2Fidentity.json")).StatusCode);
+    }
+
+    private static void WriteTransparentPng(string path)
+    {
+        using var bitmap = new SKBitmap(1, 1, SKColorType.Rgba8888, SKAlphaType.Premul);
+        bitmap.Erase(SKColors.Transparent);
+        using var image = SKImage.FromBitmap(bitmap);
+        using var data = image.Encode(SKEncodedImageFormat.Png, quality: 100);
+        File.WriteAllBytes(path, data.ToArray());
     }
 }

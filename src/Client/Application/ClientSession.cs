@@ -99,6 +99,9 @@ public sealed class ClientSession
     public Task<byte[]?> DownloadCoverAsync(string fileName, CancellationToken cancellationToken = default) =>
         _api.DownloadCoverAsync(fileName, cancellationToken);
 
+    public Task<byte[]?> DownloadLanPartyLogoAsync(string fileName, CancellationToken cancellationToken = default) =>
+        _api.DownloadLanPartyLogoAsync(fileName, cancellationToken);
+
     private void TryDeleteStaging(string staging)
     {
         try

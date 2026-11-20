@@ -11,12 +11,15 @@
   <Color x:Key="TextSecondary">#9AA8B8</Color>
   <Color x:Key="TextMuted">#64748B</Color>
   <Color x:Key="AccentDefault">#A3E635</Color>
+  <Color x:Key="AccentHover">#BEF264</Color>
   <Color x:Key="AccentSoft">#1FA3E635</Color> <!-- accent.default al 12% (del design) -->
+  <Color x:Key="AccentSoftHover">#33A3E635</Color>
   <Color x:Key="AccentOn">#16210A</Color>
   <Color x:Key="InfoDefault">#38BDF8</Color>
   <Color x:Key="SuccessDefault">#4ADE80</Color>
   <Color x:Key="WarningDefault">#FBBF24</Color>
   <Color x:Key="DangerDefault">#F87171</Color>
+  <Color x:Key="DangerHover">#FCA5A5</Color>
 
   <SolidColorBrush x:Key="BgAppBrush" Color="{StaticResource BgApp}"/>
   <SolidColorBrush x:Key="BgTitlebarBrush" Color="{StaticResource BgTitlebar}"/>
@@ -28,12 +31,15 @@
   <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondary}"/>
   <SolidColorBrush x:Key="TextMutedBrush" Color="{StaticResource TextMuted}"/>
   <SolidColorBrush x:Key="AccentBrush" Color="{StaticResource AccentDefault}"/>
+  <SolidColorBrush x:Key="AccentHoverBrush" Color="{StaticResource AccentHover}"/>
   <SolidColorBrush x:Key="AccentSoftBrush" Color="{StaticResource AccentSoft}"/>
+  <SolidColorBrush x:Key="AccentSoftHoverBrush" Color="{StaticResource AccentSoftHover}"/>
   <SolidColorBrush x:Key="AccentOnBrush" Color="{StaticResource AccentOn}"/>
   <SolidColorBrush x:Key="InfoBrush" Color="{StaticResource InfoDefault}"/>
   <SolidColorBrush x:Key="SuccessBrush" Color="{StaticResource SuccessDefault}"/>
   <SolidColorBrush x:Key="WarningBrush" Color="{StaticResource WarningDefault}"/>
   <SolidColorBrush x:Key="DangerBrush" Color="{StaticResource DangerDefault}"/>
+  <SolidColorBrush x:Key="DangerHoverBrush" Color="{StaticResource DangerHover}"/>
 
   <!-- Tipografía del design (MiSans, empaquetada en Assets) -->
   <FontFamily x:Key="MiSans">avares://LanForge.Client/Assets/MiSans.ttf#MiSans</FontFamily>
@@ -76,6 +82,14 @@
     <Setter Property="CornerRadius" Value="10"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{StaticResource AccentHoverBrush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
   </ControlTheme>
 
   <!-- Botón secundario (surface) del design -->
@@ -92,6 +106,42 @@
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="HorizontalContentAlignment" Value="Center"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{StaticResource BorderBrushDefault}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+  </ControlTheme>
+
+  <!-- Acción destructiva; conserva la señal de peligro también al pasar el cursor. -->
+  <ControlTheme x:Key="ButtonDanger" TargetType="Button">
+    <Setter Property="Background" Value="#14F87171"/>
+    <Setter Property="BorderBrush" Value="#55F87171"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="Foreground" Value="{StaticResource DangerBrush}"/>
+    <Setter Property="FontFamily" Value="{StaticResource MiSans}"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="FontSize" Value="13"/>
+    <Setter Property="Height" Value="40"/>
+    <Setter Property="Padding" Value="16,0"/>
+    <Setter Property="CornerRadius" Value="8"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="#33F87171"/>
+      <Setter Property="BorderBrush" Value="{StaticResource DangerHoverBrush}"/>
+      <Setter Property="Foreground" Value="{StaticResource DangerHoverBrush}"/>
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.5"/>
+      <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
   </ControlTheme>
 
   <!-- Chip de filtro. El estado activo se marca con la clase "active". -->
@@ -107,10 +157,19 @@
     <Setter Property="Padding" Value="14,0"/>
     <Setter Property="CornerRadius" Value="16"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{StaticResource Surface2Brush}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+    </Style>
     <Style Selector="^.active">
       <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
       <Setter Property="BorderThickness" Value="0"/>
+    </Style>
+    <Style Selector="^.active:pointerover">
+      <Setter Property="Background" Value="{StaticResource AccentSoftHoverBrush}"/>
     </Style>
   </ControlTheme>
 
@@ -125,6 +184,11 @@
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="Padding" Value="12,0"/>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{StaticResource Surface1Brush}"/>
+      <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
+    </Style>
     <Style Selector="^.active">
       <Setter Property="Background" Value="{StaticResource AccentSoftBrush}"/>
       <Setter Property="Foreground" Value="{StaticResource AccentBrush}"/>
@@ -193,6 +257,10 @@
                 Background="{StaticResource TextMutedBrush}" HorizontalAlignment="Left"/>
       </Template>
     </Setter>
+    <Setter Property="Cursor" Value="Hand"/>
+    <Style Selector="^:pointerover">
+      <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+    </Style>
     <Style Selector="^:checked">
       <Setter Property="Background" Value="{StaticResource AccentBrush}"/>
       <Setter Property="BorderThickness" Value="0"/>
@@ -202,6 +270,9 @@
                   Background="{StaticResource AccentOnBrush}" HorizontalAlignment="Right"/>
         </Template>
       </Setter>
+    </Style>
+    <Style Selector="^:checked:pointerover">
+      <Setter Property="Background" Value="{StaticResource AccentHoverBrush}"/>
     </Style>
   </ControlTheme>
 

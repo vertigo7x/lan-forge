@@ -66,4 +66,7 @@ public sealed class StubServerApi : IServerApi
 
     public Task<byte[]?> DownloadCoverAsync(string fileName, CancellationToken cancellationToken = default) =>
         Task.FromResult<byte[]?>(null);
+
+    public Task<byte[]?> DownloadLanPartyLogoAsync(string fileName, CancellationToken cancellationToken = default) =>
+        Task.FromResult<byte[]?>(null);
 }

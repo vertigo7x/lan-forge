@@ -113,13 +113,18 @@ public sealed class SqliteClientStore : IClientStore, IDisposable
     {
         var entries = new List<CatalogEntry>();
         await using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT game_id, title, package_id, version, total_size_bytes, file_count FROM catalog ORDER BY title;";
+        command.CommandText = """
+            SELECT game_id, title, package_id, version, total_size_bytes, file_count, cover_path
+            FROM catalog
+            ORDER BY title;
+            """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
         {
             entries.Add(new CatalogEntry(
                 reader.GetString(0), reader.GetString(1), reader.GetString(2),
-                reader.GetString(3), reader.GetInt64(4), reader.GetInt32(5)));
+                reader.GetString(3), reader.GetInt64(4), reader.GetInt32(5),
+                reader.IsDBNull(6) ? null : reader.GetString(6)));
         }
 
         return entries;
@@ -143,8 +148,9 @@ public sealed class SqliteClientStore : IClientStore, IDisposable
                 await using var insert = _connection.CreateCommand();
                 insert.Transaction = transaction;
                 insert.CommandText = """
-                    INSERT INTO catalog (game_id, title, package_id, version, total_size_bytes, file_count, synced_utc)
-                    VALUES ($game, $title, $package, $version, $size, $count, $synced);
+                    INSERT INTO catalog (
+                        game_id, title, package_id, version, total_size_bytes, file_count, cover_path, synced_utc)
+                    VALUES ($game, $title, $package, $version, $size, $count, $cover, $synced);
                     """;
                 insert.Parameters.AddWithValue("$game", entry.GameId);
                 insert.Parameters.AddWithValue("$title", entry.Title);
@@ -152,6 +158,7 @@ public sealed class SqliteClientStore : IClientStore, IDisposable
                 insert.Parameters.AddWithValue("$version", entry.Version);
                 insert.Parameters.AddWithValue("$size", entry.TotalSizeBytes);
                 insert.Parameters.AddWithValue("$count", entry.FileCount);
+                insert.Parameters.AddWithValue("$cover", (object?)entry.CoverPath ?? DBNull.Value);
                 insert.Parameters.AddWithValue("$synced", FormatDate(DateTimeOffset.UtcNow));
                 await insert.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -317,6 +324,7 @@ public sealed class SqliteClientStore : IClientStore, IDisposable
                 version          TEXT NOT NULL,
                 total_size_bytes INTEGER NOT NULL,
                 file_count       INTEGER NOT NULL,
+                cover_path       TEXT NULL,
                 synced_utc       TEXT NOT NULL
             );
             CREATE TABLE IF NOT EXISTS installed (
@@ -338,6 +346,22 @@ public sealed class SqliteClientStore : IClientStore, IDisposable
             );
             """;
         command.ExecuteNonQuery();
+        EnsureColumn("catalog", "cover_path", "TEXT NULL");
+    }
+
+    /// <summary>Aplicar columnas añadidas sin invalidar el catálogo ya sincronizado.</summary>
+    private void EnsureColumn(string table, string column, string definition)
+    {
+        using var check = _connection.CreateCommand();
+        check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $name;";
+        check.Parameters.AddWithValue("$name", column);
+        var exists = (long)(check.ExecuteScalar() ?? 0) > 0;
+        if (!exists)
+        {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {definition};";
+            alter.ExecuteNonQuery();
+        }
     }
 
     private static string FormatDate(DateTimeOffset value) =>

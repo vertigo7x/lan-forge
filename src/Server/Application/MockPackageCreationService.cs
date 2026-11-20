@@ -1,13 +1,13 @@
 namespace LanForge.Server.Application;
 
 /// <summary>
-/// Implementación simulada de <see cref="IPackageCreationService"/>. No habla con
-/// ningún endpoint: reproduce el comportamiento observable del servidor real
+/// Implementación simulada de <see cref="IPackageCreationService"/>. Reproduce el
+/// comportamiento observable del servicio de publicación real
 /// (latencia, éxito y errores de validación por campo) para que el formulario
 /// pueda probarse de forma aislada.
 ///
-/// El contrato es idéntico al que cumplirá el cliente HTTP real, así que
-/// sustituir esta implementación por la real no obliga a tocar la vista ni el
+/// El contrato es idéntico al de la implementación real, así que sustituir esta
+/// implementación por la real no obliga a tocar la vista ni el
 /// view model: ambos dependen solo de <see cref="IPackageCreationService"/>.
 /// </summary>
 public sealed class MockPackageCreationService : IPackageCreationService

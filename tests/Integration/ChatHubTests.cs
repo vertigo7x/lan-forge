@@ -104,6 +104,48 @@ public sealed class ChatHubTests : IDisposable
     }
 
     [Fact]
+    public async Task LosMiembrosSeActualizanCuandoUnJugadorSeReconectaConOtroNombre()
+    {
+        var options = new ServerOptions(_temp.Path, HttpPort: 0, ListenAddress: "127.0.0.1");
+        await using var app = ServerWebHost.CreateApp(options);
+        await app.StartAsync();
+        var address = app.Services.GetRequiredService<IServer>()
+            .Features.Get<IServerAddressesFeature>()!.Addresses.First();
+
+        await using var playerB = CreateClient(address, "RuliPC");
+        await playerB.StartAsync();
+        await playerB.InvokeAsync("Join", ChatHubContract.GeneralChannel);
+
+        TaskCompletionSource<IReadOnlyList<string>>? membersChanged = null;
+        playerB.On<string, IReadOnlyList<string>>(ChatHubContract.ReceiveMembersMethod, (_, members) =>
+        {
+            if (members.Contains("AnaNueva", StringComparer.Ordinal))
+            {
+                membersChanged?.TrySetResult(members);
+            }
+        });
+
+        await using (var playerA = CreateClient(address, "AnaPC"))
+        {
+            await playerA.StartAsync();
+            await playerA.InvokeAsync("Join", ChatHubContract.GeneralChannel);
+            await playerA.StopAsync();
+        }
+
+        membersChanged = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        // La desconexión ya se produjo: forzamos la observación del estado actual
+        // con la reconexión, que debe anunciar el nombre nuevo.
+        await using var renamedPlayer = CreateClient(address, "AnaNueva");
+        await renamedPlayer.StartAsync();
+        await renamedPlayer.InvokeAsync("Join", ChatHubContract.GeneralChannel);
+
+        var members = await membersChanged.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Contains("AnaNueva", members);
+        Assert.Contains("RuliPC", members);
+        Assert.DoesNotContain("AnaPC", members);
+    }
+
+    [Fact]
     public async Task Registry_KeepsGeneral_AndRemovesEmptyRooms()
     {
         var registry = new ChatRoomRegistry();

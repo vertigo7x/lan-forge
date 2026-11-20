@@ -62,6 +62,21 @@ public sealed class SqliteClientStoreTests : IDisposable
     }
 
     [Fact]
+    public async Task Catalog_Replace_ConservaLaReferenciaDePortada()
+    {
+        using var store = CreateStore();
+        await store.ReplaceCatalogAsync(
+        [
+            new CatalogEntry("quake3", "Quake III Arena", "quake3", "1.32", 1, 1,
+                "quake3-aabbcc.png"),
+        ]);
+
+        var entry = Assert.Single(await store.GetCatalogAsync());
+
+        Assert.Equal("quake3-aabbcc.png", entry.CoverPath);
+    }
+
+    [Fact]
     public async Task Installed_SaveGetRemove()
     {
         using var store = CreateStore();

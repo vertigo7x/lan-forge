@@ -10,8 +10,8 @@ namespace LanForge.IntegrationTests;
 /// desde el contenedor de servicios (cualquier componente la usa) y admitir una
 /// implementación alternativa sin tocar al consumidor.
 ///
-/// El contenedor resuelve el cliente HTTP real: el formulario habla con el endpoint
-/// POST /api/v1/packages del propio servidor.
+/// El contenedor resuelve el servicio local: el formulario publica mediante el
+/// mismo caso de uso que el catálogo.
 /// </summary>
 public sealed class PackageCreationServiceLayerTests : IDisposable
 {
@@ -29,7 +29,7 @@ public sealed class PackageCreationServiceLayerTests : IDisposable
         var service = app.Services.GetRequiredService<IPackageCreationService>();
 
         Assert.NotNull(service);
-        Assert.IsType<HttpPackageCreationService>(service);
+        Assert.IsType<CatalogPackageCreationService>(service);
     }
 
     [Fact]

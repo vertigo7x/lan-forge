@@ -24,13 +24,13 @@ public sealed class PackageCreateViewComponentTests(HeadlessServerFixture fixtur
     public void Dispose() => _game.Dispose();
 
     [Fact]
-    public void El_contenedor_resuelve_el_cliente_real_del_endpoint()
+    public void El_contenedor_resuelve_el_servicio_local_del_catalogo()
     {
-        // El formulario no usa la simulacion: la vista recibe el cliente HTTP real
-        // desde el contenedor de servicios del servidor.
+        // El formulario no usa la simulacion: la vista recibe el servicio local
+        // del catálogo desde el contenedor de servicios del servidor.
         var service = fixture.Services.GetRequiredService<IPackageCreationService>();
 
-        Assert.IsType<HttpPackageCreationService>(service);
+        Assert.IsType<CatalogPackageCreationService>(service);
     }
 
     [Fact]

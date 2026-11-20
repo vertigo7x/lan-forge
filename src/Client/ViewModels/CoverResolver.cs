@@ -47,19 +47,4 @@ public static class CoverResolver
         return path is null ? null : new Uri(path).AbsoluteUri;
     }
 
-    /// <summary>
-    /// Portada de reserva del design. La eleccion es estable para un mismo gameId
-    /// (no cambia entre refrescos) y no puede fallar con hash int.MinValue.
-    /// </summary>
-    public static string FallbackAsset(string gameId, IReadOnlyList<string> assets)
-    {
-        ArgumentNullException.ThrowIfNull(assets);
-        if (assets.Count == 0)
-        {
-            throw new ArgumentException("La lista de portadas de reserva esta vacia.", nameof(assets));
-        }
-
-        var hash = StringComparer.Ordinal.GetHashCode(gameId) & int.MaxValue;
-        return assets[hash % assets.Count];
-    }
 }

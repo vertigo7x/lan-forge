@@ -8,9 +8,9 @@ namespace LanForge.Server.Application;
 /// para que se puedan probar sin levantar la aplicación.
 ///
 /// El formulario trabaja con rutas absolutas (son las que devuelve el dialogo del
-/// sistema operativo), pero el payload del endpoint lleva la ruta del ejecutable
-/// relativa a la carpeta origen: es lo que el servidor espera y lo que el cliente
-/// resuelve contra el directorio de instalación del juego.
+/// sistema operativo), pero la publicación lleva la ruta del ejecutable relativa a
+/// la carpeta origen: es lo que el manifiesto espera y lo que el cliente resuelve
+/// contra el directorio de instalación del juego.
 /// </summary>
 public static class PackageSourcePaths
 {

@@ -1,11 +1,14 @@
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using LanForge.Client.Application;
+using LanForge.Client.Controls;
 using LanForge.Client.Infrastructure;
 using LanForge.Client.ViewModels;
 using LanForge.Shared.Models;
@@ -14,18 +17,6 @@ namespace LanForge.Client;
 
 public partial class MainWindow : Window
 {
-    private static readonly string[] CoverAssets =
-    [
-        "avares://LanForge.Client/Assets/cover-neon-drift.png",
-        "avares://LanForge.Client/Assets/cover-starfall-arena.png",
-        "avares://LanForge.Client/Assets/cover-dungeon-raid.png",
-        "avares://LanForge.Client/Assets/cover-mecha-clash.png",
-        "avares://LanForge.Client/Assets/cover-pixel-pirates.png",
-        "avares://LanForge.Client/Assets/cover-zombie-protocol.png",
-        "avares://LanForge.Client/Assets/cover-bumper-bots.png",
-        "avares://LanForge.Client/Assets/cover-gravity-league.png",
-    ];
-
     private const string SettingPlayerName = "player_name";
     private const string SettingConfirmUninstall = "confirm_uninstall";
     private const string SettingAutoConnect = "auto_connect";
@@ -39,6 +30,7 @@ public partial class MainWindow : Window
     private IChatService? _chat;
     private string _currentChannel = LanForge.Shared.Chat.ChatHubContract.GeneralChannel;
     private readonly ObservableCollection<LanForge.Shared.Chat.ChatMessage> _chatMessages = [];
+    private readonly Dictionary<string, List<LanForge.Shared.Chat.ChatMessage>> _chatHistory = new(StringComparer.Ordinal);
     private readonly ObservableCollection<ChatChannelItem> _chatChannels = [];
     private readonly ObservableCollection<string> _chatMembers = [];
     private List<CatalogEntry> _catalog = [];
@@ -138,6 +130,7 @@ public partial class MainWindow : Window
     private async void OnSaveSettings(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
         await SaveSettingsCoreAsync();
+        await ReconnectChatForUpdatedNameAsync();
         PlayerHintText.Text = "Cambios guardados.";
         StatusText.Text = "Ajustes guardados.";
     }
@@ -158,6 +151,7 @@ public partial class MainWindow : Window
         ToggleConfirmUninstall.IsChecked = true;
         ToggleAutoConnect.IsChecked = true;
         await SaveSettingsCoreAsync();
+        await ReconnectChatForUpdatedNameAsync();
         PlayerHintText.Text = "Valores por defecto restaurados.";
         StatusText.Text = "Ajustes restablecidos.";
     }
@@ -315,6 +309,7 @@ public partial class MainWindow : Window
         // En el riel de iconos se quitan los rótulos de la barra lateral, pero los
         // botones se quedan: si no, no habria forma de cambiar de pantalla.
         SidebarMenuTitle.IsVisible = !narrow;
+        LanPartyLogoImage.IsVisible = !narrow && LanPartyLogoImage.Source is not null;
         SidebarBottom.IsVisible = !narrow;
         SetNavLabel(NavCatalogText, "   Catálogo", narrow);
         SetNavLabel(NavSteamText, "   Steam", narrow);
@@ -418,6 +413,7 @@ public partial class MainWindow : Window
         try
         {
             var result = await _session.SyncAsync(confirm);
+            await EnsureLanPartyLogoAsync(result.LanPartyLogoPath);
             UpdateServerPill(connected: true, result.ServerName, _connectedAddress ?? string.Empty, $"{result.EntryCount} juegos");
             UpdateServerCard(connected: true, result.ServerName, _connectedAddress ?? string.Empty, result.ServerFingerprint.ToString(), $"{result.EntryCount} juegos");
             StatusText.Text = string.Empty;
@@ -505,6 +501,7 @@ public partial class MainWindow : Window
         }
 
         _chatMessages.Clear();
+        _chatHistory.Clear();
         _chatChannels.Clear();
         _chatMembers.Clear();
 
@@ -532,12 +529,82 @@ public partial class MainWindow : Window
             _chat.MembersChanged += OnMembersChanged;
             await _chat.ConnectAsync($"http://{_connectedAddress}", name);
             await _chat.JoinAsync(LanForge.Shared.Chat.ChatHubContract.GeneralChannel);
+            if (!string.Equals(_currentChannel, LanForge.Shared.Chat.ChatHubContract.GeneralChannel, StringComparison.Ordinal))
+            {
+                await _chat.JoinAsync(_currentChannel);
+            }
+
             await RefreshChatAsync();
         }
         catch (Exception)
         {
             // El chat es opcional: no rompe la conexión principal.
         }
+    }
+
+    /// <summary>
+    /// Guarda localmente el logo anunciado por el handshake y lo carga desde disco.
+    /// Solo se acepta el nombre con hash generado por el servidor para impedir rutas
+    /// arbitrarias dentro del directorio de datos del cliente.
+    /// </summary>
+    private async Task EnsureLanPartyLogoAsync(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName))
+        {
+            LanPartyLogoImage.Source = null;
+            LanPartyLogoImage.IsVisible = false;
+            return;
+        }
+
+        var path = LanPartyLogoResolver.TargetPath(_options.DataDirectory, fileName);
+        if (path is null || _session is null)
+        {
+            LanPartyLogoImage.Source = null;
+            LanPartyLogoImage.IsVisible = false;
+            return;
+        }
+
+        try
+        {
+            if (!File.Exists(path))
+            {
+                var bytes = await _session.DownloadLanPartyLogoAsync(fileName);
+                if (bytes is null)
+                {
+                    return;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await File.WriteAllBytesAsync(path, bytes);
+            }
+
+            LanPartyLogoImage.Source = new Bitmap(path);
+            LanPartyLogoImage.IsVisible = Bounds.Width >= CollapsedSidebarMinWindowWidth;
+        }
+        catch (Exception)
+        {
+            // El branding es decorativo; un fichero inválido no debe impedir conectar.
+            LanPartyLogoImage.Source = null;
+            LanPartyLogoImage.IsVisible = false;
+        }
+    }
+
+    /// <summary>
+    /// El nombre del usuario se establece al abrir el hub (query <c>user</c>).
+    /// Al guardarlo de nuevo se crea una conexión con el nombre actualizado y se
+    /// recuperan los canales activos para que el resto de jugadores lo vea sin
+    /// reiniciar el cliente.
+    /// </summary>
+    private async Task ReconnectChatForUpdatedNameAsync()
+    {
+        if (_chat is null || !_chat.IsConnected || string.IsNullOrWhiteSpace(_connectedAddress))
+        {
+            return;
+        }
+
+        await _chat.DisconnectAsync();
+        _chat = null;
+        await ConnectChatAsync();
     }
 
     private async Task RefreshChatAsync()
@@ -569,6 +636,13 @@ public partial class MainWindow : Window
     {
         _currentChannel = channel;
         _chatMessages.Clear();
+        if (_chatHistory.TryGetValue(channel, out var history))
+        {
+            foreach (var message in history)
+            {
+                _chatMessages.Add(message);
+            }
+        }
 
         var members = _chat is { IsConnected: true } ? await _chat.ListMembersAsync(channel) : [];
         _chatMembers.Clear();
@@ -590,6 +664,14 @@ public partial class MainWindow : Window
     {
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
+            PlayIncomingMessageSound();
+            if (!_chatHistory.TryGetValue(message.Channel, out var history))
+            {
+                history = [];
+                _chatHistory[message.Channel] = history;
+            }
+
+            history.Add(message);
             if (!string.Equals(message.Channel, _currentChannel, StringComparison.Ordinal))
             {
                 return;
@@ -599,6 +681,27 @@ public partial class MainWindow : Window
             Avalonia.Threading.Dispatcher.UIThread.Post(
                 () => MessagesScroll.ScrollToEnd(),
                 Avalonia.Threading.DispatcherPriority.Background);
+        });
+    }
+
+    /// <summary>Notificación breve para mensajes que llegan aunque Jugadores esté oculto.</summary>
+    private static void PlayIncomingMessageSound()
+    {
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                // La aplicación es exclusivamente Windows: un tono del sistema no
+                // requiere empaquetar ni cargar un archivo multimedia adicional.
+                if (OperatingSystem.IsWindows())
+                {
+                    Console.Beep(880, 120);
+                }
+            }
+            catch (Exception)
+            {
+                // El sonido es una mejora opcional: no puede afectar al chat.
+            }
         });
     }
 
@@ -744,8 +847,7 @@ public partial class MainWindow : Window
     }
 
     private string CoverFor(CatalogEntry entry) =>
-        CoverResolver.CachedCoverUri(_options.DataDirectory, entry.CoverPath)
-        ?? CoverResolver.FallbackAsset(entry.GameId, CoverAssets);
+        CoverResolver.CachedCoverUri(_options.DataDirectory, entry.CoverPath) ?? string.Empty;
 
     private string? GetCachedCoverPath(string? coverFileName) =>
         CoverResolver.CachedCoverUri(_options.DataDirectory, coverFileName);
@@ -776,6 +878,10 @@ public partial class MainWindow : Window
                 if (card is not null)
                 {
                     card.CoverAsset = new Uri(path).AbsoluteUri;
+                    if (ReferenceEquals(card, _bannerGame))
+                    {
+                        SetBannerCover(card.CoverAsset);
+                    }
                 }
             }
             catch (Exception)
@@ -792,6 +898,7 @@ public partial class MainWindow : Window
         var featured = visible.FirstOrDefault() ?? _catalog.FirstOrDefault();
         if (featured is null)
         {
+            SetBannerCover(null);
             BannerTitle.Text = "Sin juegos publicados";
             BannerMeta.Text = "El organizador aún no ha publicado ningún paquete.";
             BannerAction.IsVisible = false;
@@ -802,12 +909,27 @@ public partial class MainWindow : Window
 
         var card = _cards.FirstOrDefault(c => c.Entry.GameId == featured.GameId);
         _bannerGame = card;
+        SetBannerCover(card?.CoverAsset);
         BannerTitle.Text = featured.Title;
         BannerMeta.Text = $"Disponible en LAN — {GameCardItem.FormatBytes(featured.TotalSizeBytes)}";
         BannerAction.IsVisible = card is not null && !card.IsInstalledState;
         BannerAction.Content = card?.State == GameCardState.UpdateAvailable ? "Actualizar ahora" : "Instalar ahora";
         BannerHint.Text = card is { IsInstalledState: true } ? "Ya está instalado y listo para jugar" : string.Empty;
     }
+
+    /// <summary>
+    /// El banner reutiliza la portada recibida del servidor. Sin una portada
+    /// seleccionada (o mientras se descarga) se deja vacío en vez de mostrar una
+    /// imagen de muestra que podría no corresponder al juego.
+    /// </summary>
+    private void SetBannerCover(string? source) =>
+        BannerCoverImage.Source = string.IsNullOrWhiteSpace(source)
+            ? null
+            : CoverImageConverter.Instance.Convert(
+                source,
+                typeof(Avalonia.Media.IImage),
+                parameter: null,
+                CultureInfo.InvariantCulture) as Avalonia.Media.IImage;
 
     private void OnBannerAction(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {

@@ -1,9 +1,7 @@
 namespace LanForge.Server.Application;
 
 /// <summary>
-/// Claves de los campos del formulario de creación de paquetes. Coinciden con los
-/// nombres del cuerpo JSON del endpoint, de modo que los errores por campo que
-/// devuelva el servidor se puedan mapear sin traducciones intermedias.
+/// Claves de los campos del formulario de creación de paquetes.
 /// </summary>
 public static class PackageCreationFields
 {
@@ -55,9 +53,7 @@ public sealed record PackageCreationResult(
 }
 
 /// <summary>
-/// Capa de servicio del formulario de creación de paquetes. La UI depende solo de
-/// este contrato, así que se puede sustituir por un cliente HTTP del endpoint sin
-/// tocar la vista ni el view model.
+/// Capa de servicio del formulario de creación de paquetes.
 /// </summary>
 public interface IPackageCreationService
 {

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Sockets;
 using Avalonia.Controls;
+using Avalonia.Media.Imaging;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using LanForge.Server.Application;
@@ -32,15 +33,18 @@ public partial class MainWindow : Window
         ServerNameText.Text = identity.ServerName;
         AddressText.Text = $"{GetLocalIpAddress()}:{options.HttpPort}";
         FingerprintText.Text = identity.Fingerprint.ToString();
+        ChooseLanPartyLogoButton.Click += async (_, _) => await ChooseLanPartyLogoAsync();
+        ClearLanPartyLogoButton.Click += async (_, _) => await ClearLanPartyLogoAsync();
 
-        BrowseButton.Click += async (_, _) => await BrowseSourceAsync();
-        BrowseCoverButton.Click += async (_, _) => await BrowseCoverAsync();
-        PublishButton.Click += async (_, _) => await PublishAsync();
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _refreshTimer.Tick += async (_, _) => await RefreshAsync();
         _refreshTimer.Start();
 
-        Loaded += async (_, _) => await RefreshAsync();
+        Loaded += async (_, _) =>
+        {
+            await RefreshAsync();
+            await RefreshLanPartyLogoPreviewAsync();
+        };
     }
 
     private static string GetLocalIpAddress()
@@ -57,85 +61,55 @@ public partial class MainWindow : Window
         }
     }
 
-    private async Task BrowseSourceAsync()
+    private async Task ChooseLanPartyLogoAsync()
     {
-        var folders = await this.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { AllowMultiple = false });
-        var folder = folders.FirstOrDefault();
-        if (folder is not null)
-        {
-            SourceDirBox.Text = folder.Path.LocalPath;
-        }
-    }
-
-    private async Task BrowseCoverAsync()
-    {
-        var files = await this.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             AllowMultiple = false,
+            Title = "Elige el logotipo de la LAN party",
             FileTypeFilter =
             [
                 new FilePickerFileType("Imagen") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp"] },
             ],
         });
         var file = files.FirstOrDefault();
-        if (file is not null)
+        if (file is null)
         {
-            CoverBox.Text = file.Path.LocalPath;
+            return;
         }
-    }
 
-    /// <summary>
-    /// Publica un paquete. La compresion y el hashing son operaciones largas: el boton se
-    /// deshabilita y se muestra el estado mientras tanto, para que la ventana no parezca
-    /// congelada y el organizador no lance dos publicaciones a la vez.
-    /// </summary>
-    private async Task PublishAsync()
-    {
-        var services = App.WebServices!;
-        var catalog = services.GetRequiredService<CatalogService>();
-        var gameId = GameIdBox.Text?.Trim() ?? string.Empty;
-        var title = string.IsNullOrWhiteSpace(TitleBox.Text) ? gameId : TitleBox.Text.Trim();
-        var version = VersionBox.Text?.Trim() ?? string.Empty;
-        var sourceDirectory = SourceDirBox.Text ?? string.Empty;
-        var entryPoint = EntryPointBox.Text?.Trim() ?? string.Empty;
-
-        SetPublishing(true);
-        StatusText.Text = $"Publicando '{gameId}' v{version}... (comprimiendo y hasheando, esto puede tardar)";
         try
         {
-            var entry = await catalog.PublishPackageAsync(
-                gameId,
-                title,
-                version,
-                sourceDirectory,
-                entryPoint);
-            if (!string.IsNullOrWhiteSpace(CoverBox.Text))
-            {
-                await catalog.SetCoverAsync(
-                    entry.GameId,
-                    CoverBox.Text,
-                    services.GetRequiredService<ICoverStore>());
-            }
-
-            StatusText.Text = $"Publicado: {entry.Title} v{entry.Version} ({entry.FileCount} archivos, {entry.TotalSizeBytes} bytes).";
-            await RefreshAsync();
+            var branding = App.WebServices!.GetRequiredService<ILanPartyBrandingStore>();
+            await branding.SaveLogoAsync(file.Path.LocalPath);
+            LanPartyLogoStatusText.Text = "Logotipo guardado. Se mostrará al sincronizar los clientes.";
+            await RefreshLanPartyLogoPreviewAsync();
         }
         catch (Exception ex)
         {
-            StatusText.Text = $"Error al publicar: {ex.Message}";
-        }
-        finally
-        {
-            SetPublishing(false);
+            LanPartyLogoStatusText.Text = $"No se pudo guardar el logotipo: {ex.Message}";
         }
     }
 
-    /// <summary>Deshabilita el boton de publicar mientras hay una publicacion en curso.</summary>
-    private void SetPublishing(bool publishing)
+    private async Task ClearLanPartyLogoAsync()
     {
-        PublishButton.IsEnabled = !publishing;
-        BrowseButton.IsEnabled = !publishing;
-        BrowseCoverButton.IsEnabled = !publishing;
+        var branding = App.WebServices!.GetRequiredService<ILanPartyBrandingStore>();
+        await branding.ClearLogoAsync();
+        LanPartyLogoPreview.Source = null;
+        LanPartyLogoStatusText.Text = "Logotipo eliminado.";
+    }
+
+    private async Task RefreshLanPartyLogoPreviewAsync()
+    {
+        var branding = App.WebServices!.GetRequiredService<ILanPartyBrandingStore>();
+        if (string.IsNullOrWhiteSpace(branding.LogoFileName))
+        {
+            LanPartyLogoPreview.Source = null;
+            return;
+        }
+
+        await using var stream = await branding.OpenLogoAsync(branding.LogoFileName);
+        LanPartyLogoPreview.Source = stream is null ? null : new Bitmap(stream);
     }
 
     /// <summary>Borra un paquete del catalogo. La primera pulsacion pide confirmacion.</summary>

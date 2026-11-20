@@ -193,8 +193,15 @@ public sealed class CatalogService
         var game = await _store.GetGameAsync(gameId, cancellationToken)
             ?? throw new InvalidOperationException($"El juego '{gameId}' no existe.");
 
+        var previousFileName = game.CoverFile;
         var fileName = await covers.SaveAsync(gameId, sourceImagePath, cancellationToken);
         await _store.UpsertGameAsync(game with { CoverFile = fileName }, cancellationToken);
+        if (!string.IsNullOrWhiteSpace(previousFileName) &&
+            !string.Equals(previousFileName, fileName, StringComparison.OrdinalIgnoreCase))
+        {
+            await covers.DeleteAsync(previousFileName, cancellationToken);
+        }
+
         return fileName;
     }
 

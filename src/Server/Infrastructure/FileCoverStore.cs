@@ -1,9 +1,14 @@
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using LanForge.Server.Application;
 
 namespace LanForge.Server.Infrastructure;
 
-/// <summary>Portadas en disco: {root}/{gameId}{ext}. Los nombres servidos por HTTP se validan estrictamente.</summary>
+/// <summary>
+/// Portadas en disco: {root}/{gameId}-{sha256}{ext}. El hash cambia cuando cambia
+/// la imagen, de modo que los clientes no reutilizan una portada antigua de caché.
+/// Los nombres servidos por HTTP se validan estrictamente.
+/// </summary>
 public sealed class FileCoverStore : ICoverStore
 {
     private static readonly Regex FileNamePattern = new(
@@ -28,7 +33,8 @@ public sealed class FileCoverStore : ICoverStore
                 nameof(sourceImagePath));
         }
 
-        var fileName = $"{gameId}{extension.ToLowerInvariant()}";
+        var hash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(sourceImagePath))).ToLowerInvariant();
+        var fileName = $"{gameId}-{hash}{extension.ToLowerInvariant()}";
 
         // El nombre que se guarda tiene que ser el mismo que la lectura y el borrado aceptan:
         // nada de rutas, nada de traversal, nada de nombres que el servidor no podra releer.

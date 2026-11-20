@@ -3,8 +3,7 @@ namespace LanForge.Server.Application;
 /// <summary>
 /// Adjunta una imagen de portada a un juego ya publicado.
 ///
-/// El endpoint de creacion de paquetes (<c>POST /api/v1/packages</c>) habla JSON y
-/// el modelo de paquete no tiene campo de imagen (el manifiesto firmado no puede
+/// El modelo de paquete no tiene campo de imagen (el manifiesto firmado no puede
 /// admitirla sin romper la firma), asi que la portada viaja por su propio canal:
 /// el archivo se guarda con <see cref="ICoverStore"/> y la fila del juego apunta
 /// al archivo mediante <c>Game.CoverFile</c>.

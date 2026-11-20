@@ -9,7 +9,7 @@ namespace LanForge.Server.Views;
 /// <summary>
 /// Formulario independiente de creación de paquetes. Solo depende del contrato
 /// <see cref="IPackageCreationService"/>, por lo que se puede construir con un
-/// servicio simulado en pruebas o resolver el servicio real desde DI.
+/// servicio simulado en pruebas o resolver el servicio local desde DI.
 /// </summary>
 public partial class PackageCreateView : UserControl
 {

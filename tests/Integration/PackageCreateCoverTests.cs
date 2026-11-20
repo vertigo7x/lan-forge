@@ -30,6 +30,14 @@ public sealed class PackageCreateCoverTests : IDisposable
         return http;
     }
 
+    private static Task PublishAsync(WebApplication app, string sourceDirectory) =>
+        app.Services.GetRequiredService<CatalogService>().PublishPackageAsync(
+            "quake3",
+            "Quake III Arena",
+            "1.32",
+            sourceDirectory,
+            "run.exe");
+
     [Fact]
     public async Task La_portada_elegida_se_adjunta_al_juego_y_el_catalogo_la_sirve()
     {
@@ -41,34 +49,23 @@ public sealed class PackageCreateCoverTests : IDisposable
         var source = _temp.CreateSourceDirectory(("run.exe", "fake-binary"));
         var image = CreateImage();
 
-        // 1. El formulario crea el paquete por el endpoint real.
-        var response = await http.PostAsJsonAsync(
-            "/api/v1/packages",
-            new CreatePackageRequest
-            {
-                GameId = "quake3",
-                Title = "Quake III Arena",
-                Version = "1.32",
-                SourceDirectory = source,
-                EntryPoint = "run.exe",
-            },
-            SharedJson.Options);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        // 1. El formulario publica con el mismo servicio local que el catálogo.
+        await PublishAsync(app, source);
 
         // 2. La portada se adjunta al juego recien creado (el juego tiene que
         //    existir ya en el catalogo).
         var coverUploads = app.Services.GetRequiredService<ICoverUploadService>();
         var fileName = await coverUploads.UploadAsync("quake3", image);
-        Assert.Equal("quake3.png", fileName);
+        Assert.Matches("^quake3-[a-f0-9]{64}\\.png$", fileName);
 
         // 3. El catalogo la publica.
         var entries = await http.GetFromJsonAsync<List<CatalogEntry>>("/api/v1/catalog", SharedJson.Options);
         Assert.NotNull(entries);
         var entry = Assert.Single(entries!);
-        Assert.Equal("quake3.png", entry.CoverPath);
+        Assert.Equal(fileName, entry.CoverPath);
 
         // 4. Y el servidor la sirve como imagen.
-        var served = await http.GetAsync("/api/v1/covers/quake3.png");
+        var served = await http.GetAsync($"/api/v1/covers/{fileName}");
         Assert.Equal(HttpStatusCode.OK, served.StatusCode);
         Assert.Equal("image/png", served.Content.Headers.ContentType?.MediaType);
         Assert.Equal(
@@ -92,22 +89,11 @@ public sealed class PackageCreateCoverTests : IDisposable
             () => coverUploads.UploadAsync("quake3", CreateImage()));
 
         var source = _temp.CreateSourceDirectory(("run.exe", "fake-binary"));
-        var response = await http.PostAsJsonAsync(
-            "/api/v1/packages",
-            new CreatePackageRequest
-            {
-                GameId = "quake3",
-                Title = "Quake III Arena",
-                Version = "1.32",
-                SourceDirectory = source,
-                EntryPoint = "run.exe",
-            },
-            SharedJson.Options);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await PublishAsync(app, source);
 
         // Ahora si: el juego existe y la portada se puede asignar.
         var fileName = await coverUploads.UploadAsync("quake3", CreateImage());
-        Assert.Equal("quake3.png", fileName);
+        Assert.Matches("^quake3-[a-f0-9]{64}\\.png$", fileName);
     }
 
     [Fact]
@@ -119,17 +105,7 @@ public sealed class PackageCreateCoverTests : IDisposable
 
         var source = _temp.CreateSourceDirectory(("run.exe", "fake-binary"));
         using var http = CreateClient(app);
-        await http.PostAsJsonAsync(
-            "/api/v1/packages",
-            new CreatePackageRequest
-            {
-                GameId = "quake3",
-                Title = "Quake III Arena",
-                Version = "1.32",
-                SourceDirectory = source,
-                EntryPoint = "run.exe",
-            },
-            SharedJson.Options);
+        await PublishAsync(app, source);
 
         var notAnImage = Path.Combine(_temp.Path, "documento.txt");
         await File.WriteAllTextAsync(notAnImage, "esto no es una imagen");
@@ -148,18 +124,7 @@ public sealed class PackageCreateCoverTests : IDisposable
         using var http = CreateClient(app);
 
         var source = _temp.CreateSourceDirectory(("run.exe", "fake-binary"));
-        var response = await http.PostAsJsonAsync(
-            "/api/v1/packages",
-            new CreatePackageRequest
-            {
-                GameId = "quake3",
-                Title = "Quake III Arena",
-                Version = "1.32",
-                SourceDirectory = source,
-                EntryPoint = "run.exe",
-            },
-            SharedJson.Options);
-        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        await PublishAsync(app, source);
 
         var forgedImage = Path.Combine(_temp.Path, "truncada.png");
         await File.WriteAllBytesAsync(forgedImage,

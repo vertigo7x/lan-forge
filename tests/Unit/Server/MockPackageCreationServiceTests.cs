@@ -40,9 +40,8 @@ public sealed class MockPackageCreationServiceTests : IDisposable
     [Fact]
     public async Task El_titulo_vacio_es_un_error_de_validacion_como_en_el_servidor()
     {
-        // El endpoint (POST /api/v1/packages) exige el titulo; el mock reproduce
-        // esa misma regla para que la UI se comporte igual antes y despues de
-        // conectar el cliente HTTP real.
+        // El servicio local exige el titulo; el mock reproduce esa misma regla
+        // para que la UI se comporte igual en pruebas y en producción.
         var service = new MockPackageCreationService(TimeSpan.Zero);
 
         var result = await service.CreateAsync(ValidRequest() with { Title = "  " });

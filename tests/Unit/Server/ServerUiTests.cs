@@ -11,8 +11,7 @@ namespace LanForge.UnitTests.Server;
 
 /// <summary>
 /// Tests de la UI del organizador en headless. Comprueban la parte visible de las
-/// mejoras del servidor: durante la publicacion el boton queda deshabilitado (para que
-/// el organizador no lance dos publicaciones a la vez y vea el estado) y la
+/// mejoras del servidor: el catálogo no incluye el formulario de publicación y la
 /// confirmacion de borrado sobrevive al refresco periodico del listado.
 ///
 /// Comparte la coleccion "Cliente-UI" con las pruebas de la UI del cliente: las
@@ -20,8 +19,13 @@ namespace LanForge.UnitTests.Server;
 /// compartido por toda la aplicacion.
 /// </summary>
 [Collection("Cliente-UI")]
-public sealed class ServerUiTests(HeadlessServerFixture fixture)
+public sealed class ServerUiTests
 {
+    public ServerUiTests(HeadlessServerFixture fixture)
+    {
+        _ = fixture;
+    }
+
     private static MainWindow CreateWindow()
     {
         var window = new MainWindow();
@@ -33,70 +37,15 @@ public sealed class ServerUiTests(HeadlessServerFixture fixture)
     }
 
     [Fact]
-    public void LosBotonesDePublicacionEstanHabilitadosAlAbrir()
+    public void ElCatalogoNoIncluyeElFormularioDePublicacion()
     {
         HeadlessAvalonia.RunOnUiThread(() =>
         {
             var window = CreateWindow();
             try
             {
-                Assert.True(window.FindControl<Button>("PublishButton")!.IsEnabled);
-                Assert.True(window.FindControl<Button>("BrowseButton")!.IsEnabled);
-                Assert.True(window.FindControl<Button>("BrowseCoverButton")!.IsEnabled);
-            }
-            finally
-            {
-                window.Close();
-            }
-        });
-    }
-
-    [Fact]
-    public async Task DuranteLaPublicacionElBotonQuedaDeshabilitado()
-    {
-        // Publicar comprime y hashea un juego: son segundos o minutos. Sin deshabilitar
-        // el boton, el organizador creeria que no pasa nada y podria publicar dos veces.
-        var source = Path.Combine(fixture.TempPath, "juego");
-        Directory.CreateDirectory(source);
-
-        // Un archivo grande: con uno pequeno la publicacion termina antes de que el test
-        // pueda mirar, y el boton ya habria vuelto a habilitarse.
-        var payload = new byte[8 * 1024 * 1024];
-        Random.Shared.NextBytes(payload);
-        await File.WriteAllBytesAsync(Path.Combine(source, "run.exe"), payload);
-
-        await HeadlessAvalonia.RunOnUiThreadAsync(async () =>
-        {
-            var window = CreateWindow();
-            try
-            {
-                window.FindControl<TextBox>("GameIdBox")!.Text = "quake3";
-                window.FindControl<TextBox>("TitleBox")!.Text = "Quake III Arena";
-                window.FindControl<TextBox>("VersionBox")!.Text = "1.32";
-                window.FindControl<TextBox>("SourceDirBox")!.Text = source;
-                window.FindControl<TextBox>("EntryPointBox")!.Text = "run.exe";
-
-                var publish = window.FindControl<Button>("PublishButton")!;
-                publish.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-                // La publicacion arranca en segundo plano: en cuanto se ha lanzado, el boton
-                // tiene que estar deshabilitado mientras dura.
-                //
-                // El boton se deshabilita de forma sincrona (SetPublishing va antes del
-                // primer await), asi que se comprueba sin drenar antes la cola: al drenar,
-                // una maquina rapida puede terminar la publicacion entera y volver a
-                // habilitar el boton, y el test fallaba por carrera.
-                Assert.False(publish.IsEnabled);
-                Assert.False(window.FindControl<Button>("BrowseButton")!.IsEnabled);
-                Assert.False(window.FindControl<Button>("BrowseCoverButton")!.IsEnabled);
-
-                // Y el estado explica que esta en curso.
-                var status = window.FindControl<TextBlock>("StatusText")!;
-                Assert.Contains("Publicando", status.Text!);
-
-                // Al terminar, el boton vuelve a estar disponible.
-                await WaitUntilAsync(() => publish.IsEnabled);
-                Assert.True(publish.IsEnabled);
+                Assert.Null(window.FindControl<TextBox>("SourceDirBox"));
+                Assert.Null(window.FindControl<Button>("BrowseButton"));
             }
             finally
             {
@@ -151,18 +100,4 @@ public sealed class ServerUiTests(HeadlessServerFixture fixture)
         });
     }
 
-    /// <summary>Espera a que la condicion se cumpla (el trabajo de UI es asincrono).</summary>
-    private static async Task WaitUntilAsync(Func<bool> condition)
-    {
-        for (var attempt = 0; attempt < 200; attempt++)
-        {
-            HeadlessClientFixture.DrainUiQueue();
-            if (condition())
-            {
-                return;
-            }
-
-            await Task.Delay(25);
-        }
-    }
 }

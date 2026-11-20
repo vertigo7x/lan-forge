@@ -22,8 +22,8 @@
 
       <TabControl Margin="0,8,0,0">
         <TabItem Header="Catálogo">
-          <StackPanel Spacing="8">
-            <ListBox x:Name="CatalogList" Height="180">
+          <StackPanel>
+            <ListBox x:Name="CatalogList" Height="280">
               <ListBox.ItemTemplate>
                 <DataTemplate DataType="vm:CatalogRow">
                   <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8" Margin="2,4">
@@ -35,29 +35,24 @@
                 </DataTemplate>
               </ListBox.ItemTemplate>
             </ListBox>
-            <Grid ColumnDefinitions="Auto,*,Auto,*,Auto,*,Auto,*" ColumnSpacing="6">
-              <TextBlock Grid.Column="0" Text="Id juego:" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="1" x:Name="GameIdBox"/>
-              <TextBlock Grid.Column="2" Text="Versión:" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="3" x:Name="VersionBox"/>
-              <TextBlock Grid.Column="4" Text="Ejecutable:" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="5" x:Name="EntryPointBox"/>
-              <TextBlock Grid.Column="6" Text="Título:" VerticalAlignment="Center"/>
-              <TextBox Grid.Column="7" x:Name="TitleBox"/>
-            </Grid>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBox x:Name="SourceDirBox" PlaceholderText="Carpeta del juego portable" Width="420"/>
-              <Button x:Name="BrowseButton" Content="Examinar…"/>
-              <Button x:Name="PublishButton" Content="Publicar paquete"/>
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" Spacing="8">
-              <TextBox x:Name="CoverBox" PlaceholderText="Imagen de portada (png/jpg, opcional)" Width="420" IsReadOnly="True"/>
-              <Button x:Name="BrowseCoverButton" Content="Elegir imagen…"/>
-            </StackPanel>
           </StackPanel>
         </TabItem>
         <TabItem Header="Publicar">
           <views:PackageCreateView />
+        </TabItem>
+        <TabItem Header="LAN party">
+          <StackPanel Margin="12" Spacing="12">
+            <TextBlock Text="Logotipo de la LAN party" FontSize="20" FontWeight="Bold"/>
+            <TextBlock Text="Se muestra a los jugadores sobre el menú. Debe ser cuadrado y no superar 215 × 215 px."
+                       TextWrapping="Wrap"/>
+            <Image x:Name="LanPartyLogoPreview" Width="215" Height="215" Stretch="Uniform"
+                   HorizontalAlignment="Left"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="ChooseLanPartyLogoButton" Content="Elegir logotipo…"/>
+              <Button x:Name="ClearLanPartyLogoButton" Content="Quitar logotipo"/>
+            </StackPanel>
+            <TextBlock x:Name="LanPartyLogoStatusText" TextWrapping="Wrap"/>
+          </StackPanel>
         </TabItem>
         <TabItem Header="Clientes">
           <ListBox x:Name="ClientsList" Height="280"/>
@@ -66,11 +61,12 @@
           <ListBox x:Name="ChannelsList" Height="280"/>
         </TabItem>
         <TabItem Header="Operaciones">
-          <ListBox x:Name="OperationsList" Height="280"/>
+          <StackPanel Spacing="8">
+            <ListBox x:Name="OperationsList" Height="240"/>
+            <TextBlock x:Name="StatusText" TextWrapping="Wrap"/>
+          </StackPanel>
         </TabItem>
       </TabControl>
-
-      <TextBlock x:Name="StatusText" TextWrapping="Wrap"/>
     </StackPanel>
   </ScrollViewer>
 </Window>

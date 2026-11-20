@@ -7,8 +7,7 @@ namespace LanForge.Server.ViewModels;
 
 /// <summary>
 /// Estado del formulario de creación de paquetes. Es un componente independiente:
-/// no depende de la ventana principal ni del catálogo, solo del servicio de creación,
-/// que se puede sustituir por un cliente HTTP del endpoint.
+/// no depende de la ventana principal ni del catálogo, solo del servicio de creación.
 /// </summary>
 public sealed class PackageCreateViewModel : INotifyPropertyChanged
 {
@@ -37,7 +36,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
     private Bitmap? _coverPreview;
 
     /// <summary>
-    /// Errores por campo devueltos por el servidor en el ultimo envio. Se guardan
+    /// Errores por campo devueltos por el servicio en el ultimo envio. Se guardan
     /// aparte de los errores mostrados para poder conservar el mensaje del servidor
     /// cuando el usuario edita el campo y la validación de cliente no se queja
     /// (por ejemplo, "la carpeta origen no existe" solo lo puede saber el servidor).
@@ -388,7 +387,7 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
 
         try
         {
-            request = BuildPayloadRequest();
+            request = BuildPublishRequest();
         }
         catch (ArgumentException ex)
         {
@@ -618,17 +617,17 @@ public sealed class PackageCreateViewModel : INotifyPropertyChanged
             string.IsNullOrWhiteSpace(Arguments) ? null : Arguments.Trim());
 
     /// <summary>
-    /// Monta la peticion que se envia al servidor.
+    /// Monta la solicitud de publicación.
     ///
-    /// La carpeta origen se envia tal cual (ruta absoluta del servidor) y el
+    /// La carpeta origen se conserva tal cual (ruta absoluta local) y el
     /// ejecutable se convierte a ruta relativa dentro de esa carpeta: es lo que
-    /// espera el payload del endpoint y lo que el cliente resuelve contra el
+    /// espera el manifiesto y lo que el cliente resuelve contra el
     /// directorio de instalacion del juego.
     ///
     /// Lanza <see cref="ArgumentException"/> si el ejecutable no esta dentro de
     /// la carpeta origen.
     /// </summary>
-    private PackageCreationRequest BuildPayloadRequest()
+    private PackageCreationRequest BuildPublishRequest()
     {
         var sourceDirectory = SourceDirectory.Trim();
         var entryPoint = PackageSourcePaths.ToPackageRelativePath(sourceDirectory, EntryPoint.Trim());

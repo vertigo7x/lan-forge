@@ -56,18 +56,24 @@ public sealed class ChatRoomRegistry
         return false;
     }
 
+    /// <summary>
+    /// Quita una conexión de todos sus canales y devuelve los canales cuya lista
+    /// de miembros cambió. El hub los vuelve a emitir para que los clientes vean
+    /// tanto desconexiones como cambios de nombre por reconexión.
+    /// </summary>
     public IReadOnlyList<string> LeaveAll(string connectionId)
     {
-        var emptied = new List<string>();
+        var changed = new List<string>();
         foreach (var (channel, _) in _channels)
         {
-            if (Leave(connectionId, channel))
+            if (IsMember(connectionId, channel))
             {
-                emptied.Add(channel);
+                Leave(connectionId, channel);
+                changed.Add(channel);
             }
         }
 
-        return emptied;
+        return changed;
     }
 
     public IReadOnlyList<string> Members(string channel)

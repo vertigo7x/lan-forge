@@ -66,7 +66,12 @@ public sealed class ChatHub : Hub
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        _rooms.LeaveAll(Context.ConnectionId);
+        var changedChannels = _rooms.LeaveAll(Context.ConnectionId);
+        foreach (var channel in changedChannels)
+        {
+            await BroadcastMembersAsync(channel);
+        }
+
         await BroadcastChannelsAsync();
         await base.OnDisconnectedAsync(exception);
     }

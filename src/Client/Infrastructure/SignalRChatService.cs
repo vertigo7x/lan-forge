@@ -7,6 +7,8 @@ namespace LanForge.Client.Infrastructure;
 /// <summary>Cliente SignalR real contra el ChatHub del servidor.</summary>
 public sealed class SignalRChatService : IChatService
 {
+    private readonly object _channelsLock = new();
+    private readonly HashSet<string> _joinedChannels = new(StringComparer.Ordinal);
     private HubConnection? _connection;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
@@ -31,6 +33,7 @@ public sealed class SignalRChatService : IChatService
             channels => ChannelsChanged?.Invoke(channels));
         _connection.On<string, IReadOnlyList<string>>(ChatHubContract.ReceiveMembersMethod,
             (channel, members) => MembersChanged?.Invoke(channel, members));
+        _connection.Reconnected += async _ => await RejoinChannelsAsync();
 
         await _connection.StartAsync(cancellationToken);
     }
@@ -40,6 +43,10 @@ public sealed class SignalRChatService : IChatService
         if (_connection is not null)
         {
             await _connection.InvokeAsync("Join", channel, cancellationToken);
+            lock (_channelsLock)
+            {
+                _joinedChannels.Add(channel);
+            }
         }
     }
 
@@ -48,6 +55,10 @@ public sealed class SignalRChatService : IChatService
         if (_connection is not null)
         {
             await _connection.InvokeAsync("Leave", channel, cancellationToken);
+            lock (_channelsLock)
+            {
+                _joinedChannels.Remove(channel);
+            }
         }
     }
 
@@ -69,6 +80,11 @@ public sealed class SignalRChatService : IChatService
     {
         if (_connection is not null)
         {
+            lock (_channelsLock)
+            {
+                _joinedChannels.Clear();
+            }
+
             try
             {
                 await _connection.StopAsync(cancellationToken);
@@ -80,6 +96,31 @@ public sealed class SignalRChatService : IChatService
             }
 
             _connection = null;
+        }
+    }
+
+    /// <summary>
+    /// Una reconexión de SignalR crea una conexión nueva en el servidor, que ya no
+    /// pertenece a ninguno de los grupos anteriores. Se vuelve a unir a los
+    /// canales locales para seguir recibiendo mensajes aunque el usuario no haya
+    /// vuelto a abrir la pantalla de Jugadores.
+    /// </summary>
+    private async Task RejoinChannelsAsync()
+    {
+        if (_connection is null)
+        {
+            return;
+        }
+
+        string[] channels;
+        lock (_channelsLock)
+        {
+            channels = _joinedChannels.ToArray();
+        }
+
+        foreach (var channel in channels)
+        {
+            await _connection.InvokeAsync("Join", channel);
         }
     }
 }

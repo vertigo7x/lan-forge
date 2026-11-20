@@ -25,4 +25,7 @@ public interface IServerApi
 
     /// <summary>Descarga una portada de juego del servidor; null si no existe.</summary>
     Task<byte[]?> DownloadCoverAsync(string fileName, CancellationToken cancellationToken = default);
+
+    /// <summary>Descarga el logotipo global anunciado por el servidor, si sigue disponible.</summary>
+    Task<byte[]?> DownloadLanPartyLogoAsync(string fileName, CancellationToken cancellationToken = default);
 }
